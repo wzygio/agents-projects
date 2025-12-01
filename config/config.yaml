@@ -1,26 +1,50 @@
-# 全局配置
-image_paths:
-  product_model_box: "resources/imagesproduct_model_box.png"  # 文本框图片路径
-  product_model_box_2: "resources/imagesproduct_model_box2.png"  # 文本框图片路径
-  chinese_input_icon: "resources/imageschinese_input_icon.png"  # 中文输入图标图片路径
-  search_icon: "resources/imagessearch_icon.png"  # 搜索图标图片路径
-  search_box: "resources/imagessearch_box.png"  # 搜索框图片路径
-  cancel_icon: "resources/imagescancel_icon.png"  # 取消图标图片路径
-  report_images: 
-    - "resources/imagesreport_image1.png"
-    - "resources/imagesreport_image2.png"
-    - "resources/imagesreport_image3.png"
-    - "resources/imagesreport_image4.png"
-    # - "resources/imagesreport_image5.png"
-    # - "resources/imagesreport_image6.png"
-    - "resources/imagesreport_image7.png"
-  # submit_button: "images/submit_button.png"  # 提交按钮图片路径
+# --- 通用设置 ---
+common:
+  log_level: "INFO"
+  
+# --- 浏览器基础设施 ---
+browser:
+  headless: false
+  timeout: 30000
+  slow_mo: 50
 
-input_texts:
-  product_model_text: "C471 C480 C516 M588 M608 M678 M692 M693"
-  file_name_text: "V3屏体良率日报 V3入库良率还原By月周天报表 V3良率及不良率By月周天汇总报表 V3良率及不良率By批次汇总报表 V3屏体良率日报描述填报表"
-  # file_name_text: "V3屏体良率日报 V3入库良率还原By月周天报表 V3良率及不良率By月周天汇总报表 V3良率及不良率By批次汇总报表 V3CT还原时序不良率报表 V3CT修正良率及不良率By月周天报表"
+# --- 模块：日报自动化 ---
+daily_report:
+  portal_url: "http://10.73.17.76:8080/webroot/decision" # 请替换为实际内网地址
+  
+  # 业务输入数据 (YAML原生支持列表)
+  inputs:
+    product_models: 
+      - "C471"
+      - "C472"
+      - "C480"
+      - "D172"
+      - "M588"
+      - "M628"
+      - "M678"
+      - "W537"
+    reports:
+      - name: "V3屏体良率日报-A版"
+        path: "目录/良率监控/综合良率" # path 可以不填，如果不填就只按名字找
+        
+      - name: "V3良率及不良率By月周天汇总报表"
+        path: "目录/良率监控/综合良率"
+        
+      - name: "V3良率及不良率By批次汇总报表"
+        path: "目录/良率监控/综合良率"
+        
+      # - name: "V3入库良率还原By月周天报表"
+      #   path: "目录/良率监控/综合良率细项"
 
-retries: 3  # 图片匹配失败时的重试次数
-interval: 0.05  # 键盘输入间隔时间（秒）
-confidence: 0.8  # 图片匹配的置信度
+      # - name: "V3CT还原时序不良率报表"
+      #   path: "目录/良率监控/综合良率细项"
+
+      # - name: "V3CT修正良率及不良率By月周天报表"
+      #   path: "目录/良率监控/综合良率细项"
+
+      - name: "V3屏体良率日报描述填报表"
+        skip_input: true
+
+      - name: "V3入库良率by品类趋势与良率管控报表"
+        skip_input: true
+
