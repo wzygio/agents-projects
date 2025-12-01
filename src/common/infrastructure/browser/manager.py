@@ -45,7 +45,6 @@ class BrowserManager:
                 headless=headless_mode, 
                 slow_mo=slow_mo,
                 args=launch_args,  # 注入参数
-                downloads_path="./downloads_temp" # 指定 Playwright 内部缓存路径(可选)
             )
 
         if self._context is None:

@@ -69,7 +69,8 @@ class OLEDPortalPage:
         self.page.type(self.SELECTOR_SEARCH_INPUT, report_name, delay=100)
         
         logging.info("正在匹配搜索结果...")
-        
+        self.page.wait_for_timeout(1000)
+
         # 2. 【核心修改】 定位逻辑
         try:
             if report_path:
