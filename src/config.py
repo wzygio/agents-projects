@@ -51,7 +51,6 @@ class ConfigLoader:
             raise ValueError(f"YAML解析失败: {e}")
 
     def get(self, key_path, default=None):
-        # ... (这部分保持不变) ...
         keys = key_path.split(".")
         value = self._config_data
         try:
@@ -65,7 +64,10 @@ class ConfigLoader:
     #  Core Properties (核心属性访问器)
     # =======================================================
 
-    # ... (Common, Browser, Portal URL 等属性保持不变) ...
+    @property
+    def download_path(self):
+        return self.get("path.download_dir")
+    
     @property
     def log_level(self):
         return self.get("common.log_level", "INFO")

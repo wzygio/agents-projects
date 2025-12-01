@@ -11,7 +11,7 @@ try:
 except IndexError:
     pass 
 
-from src.config import config
+from src.config import config, PROJECT_ROOT
 from src.common.infrastructure.browser.manager import BrowserManager
 from src.daily_report.infrastructure.web.oled_portal import OLEDPortalPage
 
@@ -59,6 +59,31 @@ class DailyReportDownloader:
         """停止任务并释放资源"""
         self.browser_manager.stop_browser()
 
+    def _setup_download_listener(self):
+        """
+        [新增] 配置自动下载监听器
+        即便是在手动操作期间，只要有下载发生，这里都会自动接管并保存文件。
+        """
+        # 确保下载目录存在
+        download_dir = config.download_path
+
+        def handle_download(download):
+            try:
+                # 使用建议的文件名
+                suggested_filename = download.suggested_filename
+                final_path = download_dir / suggested_filename
+                
+                # 保存文件
+                download.save_as(final_path)
+                logging.info(f"💾 [检测到下载] 文件已自动保存至: {final_path}")
+                # 可以在这里打印一行显眼的提示，告诉用户去哪里找文件
+                print(f"   >>> 文件已保存: {final_path}")
+            except Exception as e:
+                logging.error(f"保存下载文件失败: {e}")
+
+        # 将监听器绑定到页面上
+        self.page.on("download", handle_download)
+
     def execute_workflow(self):
         """
         执行核心业务工作流
@@ -72,6 +97,8 @@ class DailyReportDownloader:
             if self.portal is None:
                 logging.error("Portal 初始化失败")
                 return
+            
+            self._setup_download_listener()
 
             # 1. [新增] 跳转到系统主页
             target_url = config.portal_url
@@ -133,16 +160,15 @@ class DailyReportDownloader:
         except Exception as e:
             logging.error(f"自动化任务主要流程崩溃: {e}")
         finally:
-            # 【核心修改】 防止浏览器关闭
-            # 我们移除了 self.stop()，并添加了 input() 阻塞
-            print("\n" + "="*50)
-            print(" ✅ 自动化脚本运行完毕！")
-            
-            # 这行代码会“卡住”程序，直到你按下回车
-            input() 
-            
-            logging.info("正在清理资源并退出...")
-            self.stop()
+            # 【步骤 2】 替换 input() 为无限循环等待
+            # 这样 Python 进程保持活跃，能够响应浏览器的下载事件
+            try:
+                while True:
+                    # 每 1 秒“呼吸”一次，保持连接
+                    self.page.wait_for_timeout(1000)
+            except KeyboardInterrupt:
+                logging.info("接收到退出指令，正在关闭...")
+                self.stop()
 
 if __name__ == "__main__":
     downloader = DailyReportDownloader()

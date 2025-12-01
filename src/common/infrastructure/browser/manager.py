@@ -1,7 +1,7 @@
 # 文件路径: src/common/infrastructure/browser/manager.py
 import logging
-from playwright.sync_api import sync_playwright, Browser, Page
-from src.config import config  # 假设 config 中有 headless, timeout 等配置
+from playwright.sync_api import sync_playwright, Page
+from src.config import config
 
 class BrowserManager:
     _instance = None
@@ -28,19 +28,32 @@ class BrowserManager:
             
             logging.info(f"正在启动浏览器 (Headless: {headless_mode})...")
             
-            # 【核心修改】
-            # 原代码: self._browser = self._playwright.chromium.launch(
-            # 修改为: 指定 channel="msedge"
+            # 【核心修改 1】 添加一系列参数，禁用浏览器的安全检查
+            # 这些参数能解决 .crdownload 卡住和无法下载的问题
+            launch_args = [
+                '--start-maximized',                      # 最大化
+                '--disable-blink-features=AutomationControlled', # 试图隐藏机器人特征
+                '--safebrowsing-disable-download-protection',    # 【关键】禁用下载保护
+                '--safebrowsing-disable-extension-blacklist',    # 禁用扩展黑名单
+                '--disable-infobars',                            # 隐藏"受自动测试软件控制"条
+                '--no-sandbox',
+                '--disable-dev-shm-usage',
+            ]
+
             self._browser = self._playwright.chromium.launch(
-                channel="msedge",  # <--- 加上这一行，使用电脑自带的 Edge
+                channel="msedge",  # 使用 Edge
                 headless=headless_mode, 
                 slow_mo=slow_mo,
-                args=['--start-maximized'] 
+                args=launch_args,  # 注入参数
+                downloads_path="./downloads_temp" # 指定 Playwright 内部缓存路径(可选)
             )
 
         if self._context is None:
-            # 创建上下文，设置视口大小为0表示自适应
-            self._context = self._browser.new_context(viewport={'width': 1920, 'height': 1080})
+            # 【核心修改 2】 在创建上下文时，显式允许下载
+            self._context = self._browser.new_context(
+                viewport={'width': 1920, 'height': 1080},
+                accept_downloads=True  # 【关键】告诉上下文：允许下载文件
+            )
         
         page = self._context.new_page()
         logging.info("浏览器页面已创建。")
