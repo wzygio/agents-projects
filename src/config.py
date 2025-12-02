@@ -65,12 +65,16 @@ class ConfigLoader:
     # =======================================================
 
     @property
-    def download_path(self):
-        return self.get("path.download_dir")
-    
-    @property
     def log_level(self):
         return self.get("common.log_level", "INFO")
+
+    @property
+    def data_raw_dir(self):
+        return self.get("path.data_raw_dir")
+    
+    @property
+    def data_input_dir(self):
+        return self.get("path.data_input_dir")
 
     @property
     def headless(self):
