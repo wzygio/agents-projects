@@ -37,7 +37,6 @@ class ConfigLoader:
         self._screen_size = None
 
     def _load_config(self):
-        # ... (这部分加载 YAML 的代码保持不变) ...
         target_path = self.config_path
         if not target_path.exists() and Path("config/config.yaml").exists():
             target_path = Path("config/config.yaml")
@@ -63,6 +62,10 @@ class ConfigLoader:
     # =======================================================
     #  Core Properties (核心属性访问器)
     # =======================================================
+
+    @property
+    def data_config(self):
+        return self._config_data['data']
 
     @property
     def log_level(self):

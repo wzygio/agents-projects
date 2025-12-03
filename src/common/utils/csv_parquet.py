@@ -20,8 +20,12 @@ DATA_RAW_DIR = Path(str(config.get("path.data_raw_dir")))
 # 键名方便后续引用，值为文件名
 DATASETS = {
     "hl_data": "hl_data.csv",
+    "hl_csv_data": "hl_csv_data.csv",
     "mwdl_data": "mwdl_data.csv",
-    "yield_data": "ct_yield_data.csv"
+    "yield_data": "ct_yield_data.csv",
+    "batch_yield_data": "batch_yield_data.csv",
+    "imp_ct_dft_group": "imp_ct_dft_group.csv",
+    "spot_dwr_mes_productspec_v": "spot_dwr_mes_productspec_v.csv",
 }
 # ===========================================
 
