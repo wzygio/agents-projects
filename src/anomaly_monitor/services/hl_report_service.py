@@ -10,7 +10,7 @@ except IndexError:
 from src.config import config
 
 # 导入底层设施
-from src.common.infrastructure.data_loader import DailyReportDataLoader
+from src.anomaly_monitor.infrastructure.hl_data_loader import HLtDataLoader
 # 导入核心业务逻辑
 from src.anomaly_monitor.core.concentration_analyzer import ConcentrationAnalyzer
 from src.anomaly_monitor.core.hl_report_generator import ReportGenerator
@@ -28,7 +28,7 @@ class HLReportService:
 
     def __init__(self):
         # 初始化数据加载器 (此时尚未读取文件)
-        self.loader = DailyReportDataLoader()
+        self.loader = HLtDataLoader()
         
         # 核心组件 (稍后在 load_resources 中初始化)
         self.analyzer: Optional[ConcentrationAnalyzer] = None

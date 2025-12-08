@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 from src.common.infrastructure.file_io import FileAdapter
 
-class DataRepository:
+class HLDataRepository:
     """
     数据仓库：负责向业务层提供处理好的、干净的数据集。
     集成 SourceLogicReplicator 逻辑。
@@ -85,6 +85,6 @@ class DataRepository:
             
             df['行'] = df['panel_id'].str[-4:-2]
             df['列'] = df['panel_id'].str[-2:]
-            df['membrane_pos'] = df['行'] + "-" + df['列']
+            df['membrane_pos'] = df['行'] + "-" + df['列'] # type: ignore
 
         return df

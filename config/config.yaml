@@ -13,12 +13,13 @@ data:
   input_path: "D:/wzy/Python/pyautogui-project/data/input"
   cache_path: "D:/wzy/Python/pyautogui-project/data/cache"
   hl_resources_dir: "//10.71.7.15/大数据共享/12.良率监控日报自动化"
-  
-  # 文件名映射 (Key 对应代码中的 file_key)
+
+
   files:
-    hl_raw: "hl_data.csv"            # 异常主表
-    batch_yield: "batch_yield_data.csv"  # 辅助表
-    ct_yield: "ct_yield_data.csv"    # 明细大表 (135MB)
+    hl_raw: "hl_data.csv"             # 主表
+    batch_yield: "batch_yield_data.csv" # 产出表
+    hl_history: "hl_csv_data.csv"     # [新增] 历史记录表 (用于获取HL时间、次数)
+    ct_yield: "ct_yield_data.csv"     # 明细表
     mwdl: "mwdl_data.csv"            # 可选
     
   # 字段名映射 (可选，用于后续解耦)
