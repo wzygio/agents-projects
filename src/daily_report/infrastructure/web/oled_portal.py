@@ -6,7 +6,7 @@ from src.config import config
 class OLEDPortalPage:
     def __init__(self, page: Page):
         self.page = page
-        self.default_timeout = config.timeout 
+        self.default_timeout = float(config.timeout.get('value', 30000)) if config.timeout is not None else None
         
         # --- 1. 主页/登录页元素 (这些通常在主 Frame) ---
         self.SELECTOR_LOGIN_USER = "input[placeholder='用户名']"
@@ -59,6 +59,8 @@ class OLEDPortalPage:
         """
         report_name = report_config.get("name")
         report_path = report_config.get("path") # 可能为 None
+        if not report_name or report_path is None:
+            raise ValueError("报表配置不完整，缺少 'name' 或 'path'")
         
         logging.info(f"准备搜索报表: {report_name} (路径: {report_path or '任意'})")
 

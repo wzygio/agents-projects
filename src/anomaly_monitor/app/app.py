@@ -1,5 +1,4 @@
 # 导入我们的后端服务
-
 import streamlit as st
 import pandas as pd
 import logging
@@ -10,6 +9,15 @@ from pathlib import Path
 try:
     sys.path.append(str(Path(__file__).resolve().parents[3]))
 except IndexError: pass
+
+# --- 1. 初始化系统环境 ---
+from common.utils.app_setup import AppSetup
+
+# 使用 cache_resource 避免重复初始化
+@st.cache_resource
+def init_global_resources():
+    AppSetup.initialize_app(log_name="ela_main.log")
+init_global_resources()
 
 # 导入我们的后端服务
 from src.anomaly_monitor.services.hl_report_service import HLReportService

@@ -62,6 +62,9 @@ class ConfigLoader:
     # =======================================================
     #  Core Properties (核心属性访问器)
     # =======================================================
+    @property
+    def path(self):
+        return self._config_data['path']
 
     @property
     def data_config(self):
@@ -108,7 +111,6 @@ class ConfigLoader:
         """获取登录密码 (优先从环境变量读取)"""
         return os.getenv("MES_PASSWORD")
 
-    # ... (Report Names, Models 等其他属性保持不变) ...
     @property
     def report_names(self):
         return self.get("daily_report.inputs.report_names", [])
@@ -123,7 +125,7 @@ class ConfigLoader:
         
         # 兼容旧代码：如果 YAML 里还是写的纯字符串列表，这里自动转成字典，防止报错
         cleaned_items = []
-        for item in items:
+        for item in items: # type: ignore
             if isinstance(item, str):
                 cleaned_items.append({"name": item, "path": None})
             else:

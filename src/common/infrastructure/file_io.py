@@ -7,9 +7,9 @@ class FileAdapter:
     """
     负责底层文件 I/O，实现 CSV -> Parquet 的自动缓存机制
     """
-    def __init__(self):
-        self.input_dir = Path(config.data_config['input_path'])
-        self.cache_dir = Path(config.data_config['cache_path'])
+    def __init__(self, input_dir: Path = Path(config.data_config['input_path']), cache_dir: Path = Path(config.data_config['cache_path'])):
+        self.input_dir = input_dir
+        self.cache_dir = cache_dir
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
     def load_dataframe(self, file_key: str) -> pd.DataFrame:

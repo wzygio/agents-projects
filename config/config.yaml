@@ -9,12 +9,7 @@ browser:
   slow_mo: 50
 
 data:
-  # 输入和缓存路径
-  input_path: "D:/wzy/Python/pyautogui-project/data/input"
-  cache_path: "D:/wzy/Python/pyautogui-project/data/cache"
-  hl_resources_dir: "//10.71.7.15/大数据共享/12.良率监控日报自动化"
-
-
+  
   files:
     hl_raw: "hl_data.csv"             # 主表
     batch_yield: "batch_yield_data.csv" # 产出表
@@ -29,9 +24,13 @@ data:
     batch: "batch"
 
 path:
-  hl_resources_dir: "//10.71.7.15/大数据共享/12.良率监控日报自动化"
-  data_input_dir: "D:/wzy/Python/agents-projects/data/input"
+  # 输入和缓存路径
+  input_path: "D:/wzy/Python/agent-projects/data/input"
+  data_cache_path: "D:/wzy/Python/agent-projects/data/cache"
   data_raw_dir: "D:/wzy/Python/agents-projects/data/raw"
+  hl_resources_dir: "//10.71.7.15/大数据共享/12.良率监控日报自动化"
+  log_dir: "D:/wzy/Python/agent-projects/data/log"
+  
 
 # --- 模块：日报自动化 ---
 daily_report:
