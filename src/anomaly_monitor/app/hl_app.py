@@ -9,8 +9,18 @@ try:
     sys.path.append(str(Path(__file__).resolve().parents[3]))
 except IndexError: pass
 
-# 导入后端服务
+# --- 1. 初始化系统环境 ---
 from src.anomaly_monitor.services.hl_report_service import HLReportService
+from src.anomaly_monitor.app.charts.hl_app_charts import COLUMN_MAPPING, prepare_display_data
+from src.common.utils.app_setup import AppSetup
+
+# 使用 cache_resource 避免重复初始化
+@st.cache_resource
+def init_system():
+    AppSetup.initialize_app()
+init_system()
+
+logger = logging.getLogger(__name__)
 
 # --- 页面配置 ---
 st.set_page_config(
@@ -20,26 +30,17 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-logging.basicConfig(level=logging.INFO)
-
-# --- 0. 字段映射表 (Spotfire 1:1 还原) ---
-COLUMN_MAPPING = {
-    "type_calc": "TYPE",
-    "prod_code": "prod_code",
+# 1. 增加 MWDL 的列映射 (用于下方列表展示)
+MWDL_COLUMN_MAPPING = {
     "defect_desc": "defect_desc",
+    "prod_code": "prod_code",
     "oper_group": "oper_group",
-    "ratio": "日良损",
-    "month_ratio": "CT月",
-    "week_ratio": "CT周",
-    "batch_ratio": "本批次",
-    "worsening_text": "批次恶化",
-    "lot_input_ratio": "批次产出率",
-    "batch_gap": "本批次-上批次",
-    "multiplier": "倍数",
-    "hist_time": "最新HL时间",
-    "hist_count": "HL次数",
-    "hist_ng_qty": "ng_qty",
-    "hist_reason": "HL原因"
+    "date_value": "date_value", # 批次号
+    "ratio_val": "ratio_fanel", # 我们清洗过的数值列，显示为百分比
+    "ng_qty": "ng_qty",
+    "input_qty": "input_qty",
+    "defect_group": "defect_group", # Join 来的
+    "lot_input_ratio": "lot_input_ratio" # Join 来的
 }
 
 # --- 1. Service 加载 ---
@@ -53,38 +54,7 @@ def get_service():
         return None
     return service
 
-# --- 2. 数据适配器 ---
-def prepare_display_data(df_raw: pd.DataFrame) -> pd.DataFrame:
-    df = df_raw.copy()
-    
-    # A. 补全缺失列
-    if 'type_calc' not in df.columns:
-        if 'hl次数' in df.columns:
-            df['TYPE'] = df['hl次数'].apply(lambda x: '批次首发' if x <= 1 else '非批次首发')
-        else:
-            df['TYPE'] = ""
-    else:
-        df['TYPE'] = df['type_calc'] # 显式赋值
 
-    # B. 插入勾选列
-    df.insert(0, "✅", False)
-    
-    # C. 映射列名
-    rename_dict = {k:v for k,v in COLUMN_MAPPING.items() if k in df.columns}
-    df_display = df.rename(columns=rename_dict)
-    
-    # D. 排序: 确保显示的列都在 MAPPING 里
-    final_cols = ["✅"]
-    for k, v in COLUMN_MAPPING.items():
-        if v in df_display.columns:
-            final_cols.append(v)
-            
-    # 补充未匹配到的 TYPE
-    if 'TYPE' in df.columns and 'TYPE' not in df_display.columns: # 如果前面没映射上
-        if 'TYPE' not in final_cols:
-            final_cols.insert(1, 'TYPE')
-
-    return df_display[final_cols]
 
 # --- 3. 主程序 ---
 def main():
@@ -110,7 +80,6 @@ def main():
     sel_station = st.sidebar.selectbox("发生站点", all_stations)
 
     # ================= 🔍 修改区域：数据过滤与排序 =================
-    
     df_view = service.df_hl.copy()
     
     # A. 应用过滤
@@ -187,12 +156,66 @@ def main():
         height=600,
         disabled=df_display.columns.drop("✅")
     )
+
+    # 逻辑：当且仅当用户【勾选了唯一的 1 行】时，才展示历史趋势
+    selected_rows = edited_df[edited_df["✅"] == True]
+    
+    if len(selected_rows) == 1:
+        st.divider()
+        st.subheader("📈 批次月周天数据 (历史趋势)")
+        
+        # 获取选中行的 key info
+        idx = selected_rows.index[0]
+        row_data = service.df_hl.loc[idx]
+        prod = row_data['prod_code']
+        defect = row_data['defect_desc']
+        
+        st.caption(f"当前分析对象: {prod} - {defect}")
+        
+        # 调用 Service 查询历史
+        df_history = service.get_history_by_prod_defect(prod, defect)
+        
+        if not df_history.empty:
+            # 适配器：重命名和筛选列
+            cols_show = [c for c in MWDL_COLUMN_MAPPING.keys() if c in df_history.columns]
+            df_hist_display = df_history[cols_show].rename(columns=MWDL_COLUMN_MAPPING)
+            
+            # === 🔍 新增：MWDL 百分比修正 ===
+            # 这里对应的是 'ratio_fanel' (即 ratio_val) 和 'lot_input_ratio'
+            mwdl_pct_cols = ["ratio_fanel", "lot_input_ratio"]
+            for col in mwdl_pct_cols:
+                if col in df_hist_display.columns:
+                     # 确保是数字
+                     df_hist_display[col] = pd.to_numeric(df_hist_display[col], errors='coerce').fillna(0)
+                     # 乘以 100
+                     df_hist_display[col] = df_hist_display[col] * 100
+
+            # 配置显示的列格式
+            hist_config = {
+                "ratio_fanel": st.column_config.NumberColumn("ratio_fanel", format="%.2f%%"),
+                "lot_input_ratio": st.column_config.NumberColumn("lot_input_ratio", format="%.1f%%"),
+                "ng_qty": st.column_config.NumberColumn("ng_qty", format="%d"),
+                "input_qty": st.column_config.NumberColumn("input_qty", format="%d"),
+            }
+            
+            st.dataframe(
+                df_hist_display, 
+                column_config=hist_config, 
+                use_container_width=True,
+                hide_index=True
+            )
+        else:
+            st.info("暂无该不良的历史批次数据。")
+            
+    elif len(selected_rows) > 1:
+        st.info("💡 请仅勾选 1 行以查看其详细历史趋势。")
     
     # 生成报告逻辑
     selected_rows = edited_df[edited_df["✅"] == True]
     if not selected_rows.empty:
         st.divider()
         if st.button(f"🚀 生成 {len(selected_rows)} 条报告", type="primary"):
+            logger.info(f"👉 用户点击生成报告，共选中 {len(selected_rows)} 条")
             for idx in selected_rows.index:
                 try:
                     # 使用原始索引反查数据
@@ -204,8 +227,10 @@ def main():
                     
                     with st.expander(header_text, expanded=True):
                         st.text_area("内容", report, height=300, key=f"rpt_{idx}")
+
+                    logger.info(f"✅ 成功生成报告: Index {idx}")
                 except Exception as e:
-                    st.error(f"生成出错: {e}")
+                    logger.error(f"❌ 生成失败: {e}")
 
 if __name__ == "__main__":
     main()

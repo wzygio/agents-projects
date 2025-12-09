@@ -1,6 +1,6 @@
 # --- 通用设置 ---
 common:
-  log_level: "INFO"
+  log_level: 'INFO'
   
 # --- 浏览器基础设施 ---
 browser:
@@ -11,65 +11,66 @@ browser:
 data:
   
   files:
-    hl_raw: "hl_data.csv"             # 主表
-    batch_yield: "batch_yield_data.csv" # 产出表
-    hl_history: "hl_csv_data.csv"     # [新增] 历史记录表 (用于获取HL时间、次数)
-    ct_yield: "ct_yield_data.csv"     # 明细表
-    mwdl: "mwdl_data.csv"            # 可选
+    hl_raw: 'hl_data.csv'             # 主表
+    batch_yield: 'batch_yield_data.csv' # 产出表
+    hl_history: 'hl_csv_data.csv'     # [新增] 历史记录表 (用于获取HL时间、次数)
+    ct_yield: 'ct_yield_data.csv'     # 明细表
+    mwdl_raw: 'mwdl_data.csv'            # 可选
+    defect_group_dict: 'imp_ct_dft_group.csv'
     
   # 字段名映射 (可选，用于后续解耦)
   columns:
-    prod_code: "prod_code"
-    defect_desc: "defect_desc"
-    batch: "batch"
+    prod_code: 'prod_code'
+    defect_desc: 'defect_desc'
+    batch: 'batch'
 
 path:
   # 输入和缓存路径
-  input_path: "D:/wzy/Python/agent-projects/data/input"
-  data_cache_path: "D:/wzy/Python/agent-projects/data/cache"
-  data_raw_dir: "D:/wzy/Python/agents-projects/data/raw"
-  hl_resources_dir: "//10.71.7.15/大数据共享/12.良率监控日报自动化"
-  log_dir: "D:/wzy/Python/agent-projects/data/log"
+  input_path: 'D:/wzy/Python/agent-projects/data/input'
+  data_cache_path: 'D:/wzy/Python/agent-projects/data/cache'
+  data_raw_dir: 'D:/wzy/Python/agents-projects/data/raw'
+  hl_resources_dir: '//10.71.7.15/大数据共享/12.良率监控日报自动化'
+  log_dir: 'D:/wzy/Python/agents-projects/logs'
   
 
 # --- 模块：日报自动化 ---
 daily_report:
-  portal_url: "http://10.73.17.76:8080/webroot/decision" # 请替换为实际内网地址
+  portal_url: 'http://10.73.17.76:8080/webroot/decision' # 请替换为实际内网地址
   
   # 业务输入数据 (YAML原生支持列表)
   inputs:
     product_models: 
-      - "C471"
-      - "C472"
-      - "C480"
-      - "C516"
-      - "D172"
-      - "M588"
-      - "M628"
-      - "M660"
-      - "M678"
+      - 'C471'
+      - 'C472'
+      - 'C480'
+      - 'C516'
+      - 'D172'
+      - 'M588'
+      - 'M628'
+      - 'M660'
+      - 'M678'
     reports:
-      - name: "V3屏体良率日报-A版"
-        path: "目录/良率监控/综合良率"
+      - name: 'V3屏体良率日报-A版'
+        path: '目录/良率监控/综合良率'
         
-      - name: "V3良率及不良率By月周天汇总报表"
-        path: "目录/良率监控/综合良率"
+      - name: 'V3良率及不良率By月周天汇总报表'
+        path: '目录/良率监控/综合良率'
         
-      - name: "V3良率及不良率By批次汇总报表"
-        path: "目录/良率监控/综合良率"
+      - name: 'V3良率及不良率By批次汇总报表'
+        path: '目录/良率监控/综合良率'
         
-      # - name: "V3入库良率还原By月周天报表"
-      #   path: "目录/良率监控/综合良率细项"
+      # - name: 'V3入库良率还原By月周天报表'
+      #   path: '目录/良率监控/综合良率细项'
 
-      # - name: "V3CT还原时序不良率报表"
-      #   path: "目录/良率监控/综合良率细项"
+      # - name: 'V3CT还原时序不良率报表'
+      #   path: '目录/良率监控/综合良率细项'
 
-      # - name: "V3CT修正良率及不良率By月周天报表"
-      #   path: "目录/良率监控/综合良率细项"
+      # - name: 'V3CT修正良率及不良率By月周天报表'
+      #   path: '目录/良率监控/综合良率细项'
 
-      - name: "V3屏体良率日报描述填报表"
+      - name: 'V3屏体良率日报描述填报表'
         skip_input: true
 
-      - name: "V3入库良率by品类趋势与良率管控报表"
+      - name: 'V3入库良率by品类趋势与良率管控报表'
         skip_input: true
 

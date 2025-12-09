@@ -3,17 +3,18 @@ from pathlib import Path
 import pandas as pd
 from typing import List, Dict, Optional
 
+# 添加项目根目录到 path
 try:
     sys.path.append(str(Path(__file__).resolve().parents[3]))
-except IndexError:
-    pass 
-from src.config import config
+except IndexError: pass
 
 # 导入底层设施
 from src.anomaly_monitor.infrastructure.repositories.hl_data_repository import HLDataRepository
+
 # 导入核心业务逻辑
 from src.anomaly_monitor.core.concentration_analyzer import ConcentrationAnalyzer
 from src.anomaly_monitor.core.hl_report_generator import ReportGenerator
+from src.anomaly_monitor.infrastructure.repositories.mwdl_data_repository import MWDLDataRepository
 
 # 设置日志
 logger = logging.getLogger(__name__)
@@ -29,6 +30,7 @@ class HLReportService:
     def __init__(self):
         # 初始化数据加载器 (此时尚未读取文件)
         self.repo = HLDataRepository()
+        self.mwdl_repo = MWDLDataRepository() # 新增
         
         # 核心组件 (稍后在 load_resources 中初始化)
         self.analyzer: Optional[ConcentrationAnalyzer] = None
@@ -36,6 +38,7 @@ class HLReportService:
         
         # 缓存数据
         self.df_hl: Optional[pd.DataFrame] = None
+        self.df_mwdl = None # 新增缓存
         self._is_ready = False
 
     def load_resources(self):
@@ -48,7 +51,12 @@ class HLReportService:
         try:
             # 1. 加载数据 (利用 Infrastructure 层的缓存机制)
             # 加载异常主表
+            logger.info("⏳ 正在加载异常主表数据 (HL)...")
             self.df_hl = self.repo.get_processed_hl_data()
+
+            # 加载 MWDL 历史数据 (一次性加载到内存)
+            logger.info("⏳ 正在加载历史良损数据 (MWDL)...")
+            self.df_mwdl = self.mwdl_repo.get_processed_mwdl_data()
             
             # 加载明细数据 (135MB)
             logger.info("⏳ 正在加载明细数据 (Yield Detail)...")
@@ -67,6 +75,72 @@ class HLReportService:
         except Exception as e:
             logger.error(f"❌ 服务启动失败: {e}", exc_info=True)
             raise RuntimeError(f"服务初始化失败: {e}")
+
+    def get_history_by_prod_defect(self, prod: str, defect: str) -> pd.DataFrame:
+        """
+        【UI联动接口】根据产品和不良，查询历史批次记录 (含复杂排序)
+        """
+        if self.df_mwdl is None or self.df_mwdl.empty:
+            return pd.DataFrame()
+            
+        # 1. 基础过滤
+        mask = (self.df_mwdl['prod_code'] == prod) & \
+               (self.df_mwdl['defect_desc'] == defect)
+        df_filtered = self.df_mwdl[mask].copy()
+        
+        if df_filtered.empty:
+            return df_filtered
+
+        # 2. 核心排序逻辑
+        
+        # A. 站点权重 (CT置顶)
+        if 'oper_group' in df_filtered.columns:
+            df_filtered['_station_rank'] = df_filtered['oper_group'].astype(str).apply(
+                lambda x: 0 if x.upper().strip() == 'CT' else 1
+            )
+        else:
+            df_filtered['_station_rank'] = 1
+
+        # B. 时间类型权重 (日 > 月 > 周 > 批次)
+        # 假设 date_value 列存在
+        def get_date_type_rank(val):
+            s = str(val).strip()
+            # 日: 8位纯数字 (20251209)
+            if s.isdigit() and len(s) == 8: return 0
+            # 月: 含 'M' (2025M12)
+            if 'M' in s: return 1
+            # 周: 含 'W' (2025W50)
+            if 'W' in s: return 2
+            # 批次: 其他所有情况
+            return 3
+
+        if 'date_value' in df_filtered.columns:
+            df_filtered['_date_type_rank'] = df_filtered['date_value'].apply(get_date_type_rank)
+        else:
+            df_filtered['_date_type_rank'] = 99
+
+        # 3. 执行排序
+        # 优先级: 
+        # 1. 站点权重 (Asc: 0->1)
+        # 2. 站点名称 (Asc: A->Z)
+        # 3. 时间类型 (Asc: 0->1->2->3)
+        # 4. 时间值 (Desc: 最新的日期/批次排前面)
+        sort_cols = ['_station_rank', 'oper_group', '_date_type_rank', 'date_value']
+        asc_orders = [True, True, True, False]
+        
+        # 容错: 确保列存在
+        valid_cols = []
+        valid_asc = []
+        for col, asc in zip(sort_cols, asc_orders):
+            if col in df_filtered.columns:
+                valid_cols.append(col)
+                valid_asc.append(asc)
+                
+        df_sorted = df_filtered.sort_values(by=valid_cols, ascending=valid_asc)
+        
+        # 4. 清理辅助列
+        return df_sorted.drop(columns=['_station_rank', '_date_type_rank'])
+
 
     def generate_reports(self, 
                          only_worsening: bool = True, 

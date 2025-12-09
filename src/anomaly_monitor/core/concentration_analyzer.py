@@ -10,7 +10,7 @@ class ConcentrationAnalyzer:
     
     职责：基于良率明细数据，判断是否存在 Lot/Map/Sheet 维度的集中性异常。
     算法策略：
-    1. 门槛判定 (Gatekeeper): 使用 CR-3 (前三名累计占比) 和 Top-1 占比判断整体是否存在集中趋势。
+    1. 门槛判定 (Gatekeeper): 使用 CR-5 (前三名累计占比) 和 Top-1 占比判断整体是否存在集中趋势。
     2. 名单生成 (Roll Call): 使用 20% 动态梯队法，列出具体的异常对象。
     """
 
@@ -30,7 +30,7 @@ class ConcentrationAnalyzer:
     def analyze(self, prod: str, defect: str, batch_name: str) -> str:
         """
         执行多维度集中性分析
-        :return: 格式化的分析文本，例如 "Lot集中: L3...; Map集中: 2E-..."
+        :return: 格式化的分析文本，例如 "Lot集中: L5...; Map集中: 2E-..."
         """
         if self.df.empty:
             return "Map/Lot无明显集中性 (无明细数据)"
@@ -78,22 +78,19 @@ class ConcentrationAnalyzer:
             # --- 核心算法阶段 1: 整体态势判定 (Gatekeeper) ---
             
             top_1_count = counts.iloc[0]
-            top_3_count = counts.head(3).sum()
+            top_5_count = counts.head(5).sum()
             
             top_1_ratio = top_1_count / total_ng
-            cr_3_ratio = top_3_count / total_ng # Cumulative Ratio Top 3
+            cr_5_ratio = top_5_count / total_ng # Cumulative Ratio Top 5
             
             is_concentrated = False
             
-            # 样本量过少时(比如只有1-2个)，谈集中性意义不大，除非它是唯一
-            if total_ng >= 3:
-                # 规则 A: 单寡头垄断 (老大占比 > 15%)
-                if top_1_ratio >= 0.15:
+            if total_ng >= 20:
+                if top_1_ratio >= 0.4:
                     is_concentrated = True
-                # 规则 B: 寡头联盟 (前三名占比 > 50%)
-                elif cr_3_ratio >= 0.5:
+                elif cr_5_ratio >= 0.8:
                     is_concentrated = True
-            elif total_ng > 0 and top_1_ratio > 0.5:
+            elif total_ng > 0 and top_1_ratio > 0.6:
                  # 极小样本保护：一共坏2个，1个坏在这，也算集中
                  is_concentrated = True
 
@@ -107,13 +104,11 @@ class ConcentrationAnalyzer:
             
             # 遍历前 10 名
             for name, count in counts.head(10).items():
-                # 过滤底噪: 绝对数量必须 >= 2 (除非总数极少)
-                if count < 2 and total_ng > 5:
-                    continue
+                # 过滤底噪: 绝对数量必须 >= 4 (除非总数极少)
+                if count < 4: continue
                 
-                # 动态截断: 必须达到老大数量的 20% 才有资格入选
-                # 解决 "20-20-3" 问题：3 达不到 20 的 20%(4)，会被剔除
-                if count < (benchmark_count * 0.2):
+                # 动态截断: 必须达到老大数量的 50% 才有资格入选
+                if count < (benchmark_count * 0.4):
                     break 
                 
                 # 格式化: 名称(数量) 或 名称(占比)
@@ -125,7 +120,7 @@ class ConcentrationAnalyzer:
                 txt = f"{label}集中: {'/'.join(candidates)}"
                 report_parts.append(txt)
         
-        # 3. 输出最终结论
+        # 5. 输出最终结论
         if not report_parts:
             return "Map/Lot无明显集中性"
         else:

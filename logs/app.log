@@ -1,0 +1,14 @@
+2025-12-09 21:00:05,270 [INFO] [root] 日志已初始化，写入到文件: app.log
+2025-12-09 21:00:05,271 [INFO] [root] ✅ App environment initialized successfully.
+2025-12-09 21:00:05,271 [INFO] [root] 📂 Log file: app.log
+2025-12-09 21:00:05,341 [INFO] [src.anomaly_monitor.services.hl_report_service] 🚀正在启动日报服务，加载数据资源...
+2025-12-09 21:00:05,341 [INFO] [src.anomaly_monitor.services.hl_report_service] ⏳ 正在加载异常主表数据 (HL)...
+2025-12-09 21:00:05,364 [INFO] [src.anomaly_monitor.infrastructure.hl_data_loader] ⚡ [Cache Hit] 快速加载: hl_data.parquet
+2025-12-09 21:00:05,415 [INFO] [src.anomaly_monitor.infrastructure.hl_data_loader] ⚡ [Cache Hit] 快速加载: batch_yield_data.parquet
+2025-12-09 21:00:05,518 [INFO] [src.anomaly_monitor.infrastructure.hl_data_loader] ⚡ [Cache Hit] 快速加载: hl_csv_data.parquet
+2025-12-09 21:00:05,559 [INFO] [src.anomaly_monitor.services.hl_report_service] ⏳ 正在加载历史良损数据 (MWDL)...
+2025-12-09 21:00:05,931 [INFO] [src.anomaly_monitor.infrastructure.hl_data_loader] ⚡ [Cache Hit] 快速加载: mwdl_data.parquet
+2025-12-09 21:00:05,964 [INFO] [src.anomaly_monitor.infrastructure.hl_data_loader] ⚡ [Cache Hit] 快速加载: imp_ct_dft_group.parquet
+2025-12-09 21:00:05,970 [INFO] [src.anomaly_monitor.infrastructure.hl_data_loader] ⚡ [Cache Hit] 快速加载: batch_yield_data.parquet
+2025-12-09 21:00:06,043 [INFO] [src.anomaly_monitor.services.hl_report_service] ⏳ 正在加载明细数据 (Yield Detail)...
+2025-12-09 21:00:06,083 [INFO] [src.anomaly_monitor.infrastructure.hl_data_loader] ⚡ [Cache Hit] 快速加载: ct_yield_data.parquet

@@ -34,7 +34,8 @@ class HLDataLoader:
                 'hl_raw': 'hl_data.csv',
                 'batch_yield': 'batch_yield_data.csv',
                 'hl_history': 'hl_csv_data.csv',
-                'ct_yield': 'ct_yield_data.csv'
+                'ct_yield': 'ct_yield_data.csv',
+                'imp_ct_dft_group': 'imp_ct_dft_group_data.csv'
             }
             filename = defaults.get(file_key, "")
             if not filename:
