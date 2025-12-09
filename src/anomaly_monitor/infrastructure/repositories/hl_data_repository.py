@@ -44,11 +44,27 @@ class HLDataRepository:
             df_hl['batch_gap'] = 0.0
 
         # --- C. 计算列: 批次恶化 (文本) ---
-        if 'batch' in df_hl.columns:
-            # Python slice [3:8] 对应 Spotfire substring(4,5)
-            date_str = df_hl['batch'].astype(str).apply(lambda x: x[3:8] if len(x)>8 else x)
-            gap_str = (df_hl['batch_gap'] * 100).map('{:,.2f}%'.format)
-            df_hl['worsening_text'] = str(date_str) + "批次较上批次恶化" + gap_str
+        # Spotfire Step 10: substring([batch],4,5) & '批次较上批次恶化' & [batch_gap]
+        # 修复策略：使用 apply 逐行处理，确保数据类型安全，格式化精准
+        if 'batch' in df_hl.columns and 'batch_gap' in df_hl.columns:
+            def generate_worsening_text(row):
+                # 1. 获取批次字符串
+                batch_val = str(row['batch'])
+                # 截取日期: 25/10/29... -> 10/29 (Python切片 [3:8])
+                # 容错：如果批次号太短，就保持原样
+                date_part = batch_val[3:8] if len(batch_val) >= 8 else batch_val
+                
+                # 2. 获取 Gap 值并格式化
+                gap_val = row['batch_gap']
+                # Spotfire 逻辑隐含了百分比格式化
+                gap_part = f"{gap_val * 100:.2f}%"
+                
+                # 3. 拼接
+                return f"{date_part}批次较上批次恶化{gap_part}"
+
+            df_hl['worsening_text'] = df_hl.apply(generate_worsening_text, axis=1)
+        else:
+            df_hl['worsening_text'] = ""
 
         # --- D. 计算列: 倍数 ---
         if 'month_ratio' in df_hl.columns:
