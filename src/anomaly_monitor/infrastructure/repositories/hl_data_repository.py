@@ -91,7 +91,7 @@ class HLDataRepository:
             # 2. 选取列并严格去重 (Prod + Defect 维度)
             # 注意：历史数据通常是全局维度的，所以这里我们只按 prod+defect 去重
             # 这样，无论是 CT 还是 MVI，都能匹配到同一个“历史次数”
-            cols_needed = ['prod_code', 'defect_desc', 'hl次数', '最新hl时间', 'hl原因']
+            cols_needed = ['prod_code', 'defect_desc', 'HL次数', '最新hl时间', 'hl原因']
             cols_exist = [c for c in cols_needed if c in df_hist.columns]
             
             if cols_exist:
@@ -107,8 +107,8 @@ class HLDataRepository:
                 )
                 
                 # 数值转换
-                if 'hl次数' in df_hl.columns:
-                    df_hl['hl次数'] = pd.to_numeric(df_hl['hl次数'], errors='coerce').fillna(1)
+                if 'HL次数' in df_hl.columns:
+                    df_hl['HL次数'] = pd.to_numeric(df_hl['HL次数'], errors='coerce').fillna(1)
 
         # --- G. 连接产出数据 (Step 5 Logic) ---
         if not df_yield.empty:
@@ -161,7 +161,7 @@ class HLDataRepository:
             
             # B. 合成坐标 (Map Position)
             # 直接相加，Pandas 会自动对应行，绝不会出现整列拼接的情况
-            df['membrane_pos'] = df['row_code'] + "-" + df['col_code']
+            df['membrane_pos'] = df['row_code'] + "-" + df['col_code'] # type: ignore
             
             # 为了兼容旧逻辑，保留中文列名 (如果 Analyzer 用到了)
             df['行'] = df['row_code']

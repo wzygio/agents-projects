@@ -2,7 +2,7 @@
 import pandas as pd
 from src.anomaly_monitor.core.concentration_analyzer import ConcentrationAnalyzer
 
-class ReportGenerator:
+class HLReportGenerator:
     """
     【核心组件】文本生成器
     

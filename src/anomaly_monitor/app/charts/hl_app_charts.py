@@ -6,6 +6,7 @@ from pathlib import Path
 
 # --- 0. 字段映射表 (Spotfire 1:1 还原) ---
 COLUMN_MAPPING = {
+    # ... 原有字段保持不变 ...
     "type_calc": "TYPE",
     "prod_code": "prod_code",
     "defect_desc": "defect_desc",
@@ -21,7 +22,12 @@ COLUMN_MAPPING = {
     "hist_time": "最新HL时间",
     "hist_count": "HL次数",
     "hist_ng_qty": "ng_qty",
-    "hist_reason": "HL原因"
+    "hist_reason": "HL原因",
+    
+    # [新增] 判定结果字段
+    "is_real_anomaly": "AI判定", 
+    "anomaly_type": "异常类型",   # [新增]
+    "anomaly_reasons": "判定理由"
 }
 
 # --- 2. 数据适配器 ---
@@ -30,13 +36,17 @@ def prepare_display_data(df_raw: pd.DataFrame) -> pd.DataFrame:
     
     # A. 补全缺失列
     if 'type_calc' not in df.columns:
-        if 'hl次数' in df.columns:
-            df['TYPE'] = df['hl次数'].apply(lambda x: '批次首发' if x <= 1 else '非批次首发')
+        if 'HL次数' in df.columns:
+            df['TYPE'] = df['HL次数'].apply(lambda x: '批次首发' if x <= 1 else '非批次首发')
         else:
             df['TYPE'] = ""
     else:
         df['TYPE'] = df['type_calc'] # 显式赋值
 
+    # [新增] 确保 boolean 列正确，否则 CheckboxColumn 会报错
+    if 'is_real_anomaly' in df.columns:
+        df['is_real_anomaly'] = df['is_real_anomaly'].fillna(False).astype(bool)
+        
     # B. 插入勾选列
     df.insert(0, "✅", False)
     

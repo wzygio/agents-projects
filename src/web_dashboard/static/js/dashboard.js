@@ -33,31 +33,84 @@ const ArtifactCapsule = ({ result }) => {
 
 const TASK_STRUCTURE = {
     monitor: {
-        title: "Anomaly Monitor",
+        title: "异常监控",
         nodes: [
-            { type: 'single', name: "数据读取 (Spotfire/Local)" },
-            { type: 'single', name: "异常识别 (AI分析)" },
-            { type: 'single', name: "报告生成 (Summary)" },
+            // 1. 数据基础设施
             { 
                 type: 'group', 
-                name: "报告处理与分发", 
-                subSteps: ["添加到HL记录表", "添加到异常管理表", "邮件通知责任人"]
+                name: "数据获取与预处理", 
+                subSteps: [
+                    "Spotfire数据导出", // Infrastructure: Hybrid方案
+                    "数据清洗与预处理"      // Infrastructure: Web CrawlerRepository: HL + Yield + History
+                ]
+            },
+            // 2. 核心算法层
+            { 
+                type: 'group', 
+                name: "真实异常识别", 
+                subSteps: [
+                    "L1: 基础筛选",      // Detector: Threshold
+                    "L2: 历史批次分析",  // Detector: Relative Worsening
+                    "L3: 集中性分析"     // Analyzer: Concentration Logic
+                ]
+            },
+            // 3. AI 大脑层 (新增)
+            { 
+                type: 'single', 
+                name: "控制台启动" // Brain: 良率分析师 Agent
+            },
+            // 4. 交付层
+            { 
+                type: 'group', 
+                name: "闭环处置流程", 
+                subSteps: [
+                    "生成 HL 通报摘要",      // Generator: Summary
+                    "写入HL记录表",      // Repository: Save
+                    "更新异常管理表",      // Repository: Update List
+                    "EM通知责任人"         // Utils: Notification
+                ]
             }
         ]
     },
     daily_report: {
-        title: "Daily Report RPA",
+        title: "日报生成",
         nodes: [
-            { type: 'single', name: "生产报表下载" },
+            // 1. 基础设施层：RPA 抓取
             { 
                 type: 'group', 
-                name: "AI 智能日报生成", 
-                subSteps: ["PPT日报 (入库良率)", "Excel日报 (过货影响)"]
+                name: "数据获取与预处理", 
+                subSteps: [
+                    "Playwright报表下载",  // Infra: Web Crawler
+                    "数据清洗与预处理"      // Infra: Data Cleaning
+                ]
             },
+            // 2. 核心层：Excel 计算引擎
             { 
                 type: 'group', 
-                name: "日报分发流程", 
-                subSteps: ["归档到公盘", "截取关键指标", "发送全员邮件", "同步至Web系统"]
+                name: "Excel日报内容生成", 
+                subSteps: [
+                    "各产品当日数据汇总", // Config: YAML Loader
+                    "各产品当日异常报告"  // Core: Exception Processor
+                ]
+            },
+            // 3. 核心层：PPT 渲染引擎
+            { 
+                type: 'group', 
+                name: "PPT日报生成", 
+                subSteps: [
+                    "画布预处理 (Canvas Prep)",  // Core: Canvas Preprocessor
+                    "数据注入与图表渲染"         // Core: Table Renderer
+                ]
+            },
+            // 4. 应用层：AI + 交付
+            { 
+                type: 'group', 
+                name: "日报分发与归档", 
+                subSteps: [
+                    "日报推送 (Email)",    // App: Distribution
+                    "EM通知群推送",    // App: Distribution
+                    "归档至公盘 (Archive)"       // Utils: File Copy
+                ]
             }
         ]
     }
@@ -208,8 +261,8 @@ function App() {
                     <div className="h-10 w-10 bg-black rounded-full flex items-center justify-center text-white mb-4 shadow-xl shadow-black/20">
                         <Icon name="aperture" size={24} className="text-white" />
                     </div>
-                    <h1 className="text-xl font-extrabold tracking-tight text-black">OLED.Auto</h1>
-                    <p className="text-xs font-bold text-slate-400 mt-1 tracking-widest uppercase">Process Hub</p>
+                    <h1 className="text-xl font-extrabold tracking-tight text-black">值班自动化系统</h1>
+                    <p className="text-xs font-bold text-slate-400 mt-1 tracking-widest uppercase">PIE - 大数据科</p>
                 </div>
                 
                 <div className="flex-1 space-y-2">
@@ -241,7 +294,7 @@ function App() {
                 <div className="flex justify-between items-end mb-10 pb-6 border-b border-slate-200">
                     <div>
                         <h2 className="text-4xl font-black text-black tracking-tight mb-2">{TASK_STRUCTURE[activeTab].title}</h2>
-                        <p className="text-slate-600 font-medium">Enterprise automated workflow integration.</p>
+                        <p className="text-slate-600 font-medium">自动化解决方案 · 混合RPA架构 · AI Agent辅助分析</p>
                     </div>
                     <button 
                         onClick={() => startProcess(activeTab)} 

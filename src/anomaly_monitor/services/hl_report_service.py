@@ -8,73 +8,111 @@ try:
     sys.path.append(str(Path(__file__).resolve().parents[3]))
 except IndexError: pass
 
-# 导入底层设施
+# 导入基础设施层
 from src.anomaly_monitor.infrastructure.repositories.hl_data_repository import HLDataRepository
+from src.anomaly_monitor.infrastructure.repositories.mwdl_data_repository import MWDLDataRepository
 
 # 导入核心业务逻辑
-from src.anomaly_monitor.core.concentration_analyzer import ConcentrationAnalyzer
-from src.anomaly_monitor.core.hl_report_generator import ReportGenerator
-from src.anomaly_monitor.infrastructure.repositories.mwdl_data_repository import MWDLDataRepository
+from src.anomaly_monitor.core.hl_report_generator import HLReportGenerator
+from src.anomaly_monitor.core.anomaly_detector import AnomalyDetector
+from src.anomaly_monitor.core.ai_anomaly_detector import AIAnomalyDetector
 
 # 设置日志
 logger = logging.getLogger(__name__)
 
 class HLReportService:
-    """
-    【服务编排层】OLED 良率日报生成服务
-    
-    它是外部调用（如 GUI、CLI、API）的统一入口。
-    它负责协调 Data Load -> Analyze -> Generate 的全流程。
-    """
-
     def __init__(self):
-        # 初始化数据加载器 (此时尚未读取文件)
-        self.repo = HLDataRepository()
-        self.mwdl_repo = MWDLDataRepository() # 新增
+        # Repositories
+        self.hl_repo = HLDataRepository()
+        self.mwdl_repo = MWDLDataRepository()
         
-        # 核心组件 (稍后在 load_resources 中初始化)
-        self.analyzer: Optional[ConcentrationAnalyzer] = None
-        self.generator: Optional[ReportGenerator] = None
-        
-        # 缓存数据
+        # Core Components
+        self.generator: Optional[HLReportGenerator] = None
+        self.detector: Optional[AnomalyDetector] = None # [新增]
+        # self.detector: Optional[AIAnomalyDetector] = None # 类型更新
+
+        # Data Cache
         self.df_hl: Optional[pd.DataFrame] = None
-        self.df_mwdl = None # 新增缓存
+        self.df_mwdl: Optional[pd.DataFrame] = None
         self._is_ready = False
 
     def load_resources(self):
         """
-        初始化资源：读取数据并装配核心组件
-        注意：这可能需要几秒钟 (取决于 ct_yield_data 的大小)
+        加载所有必要数据并初始化核心组件
         """
-        logger.info("🚀正在启动日报服务，加载数据资源...")
+        logger.info("⏳ [Service] 开始加载所有资源...")
         
         try:
-            # 1. 加载数据 (利用 Infrastructure 层的缓存机制)
-            # 加载异常主表
-            logger.info("⏳ 正在加载异常主表数据 (HL)...")
-            self.df_hl = self.repo.get_processed_hl_data()
+            # 1. 加载数据 (Infrastructure Layer)
+            self.df_hl = self.hl_repo.get_processed_hl_data()
+            df_yield_detail = self.hl_repo.get_yield_detail_data() # 获取明细数据用于集中性分析
+            self.df_mwdl = self.mwdl_repo.get_processed_mwdl_data() # 获取历史数据用于对比
+            
+            # 2. 初始化核心组件 (Core Layer)
+            # Generator 需要 Analyzer，Detector 也需要 Analyzer (或内部集成)
+            # 这里我们在 Detector 内部实例化了 Analyzer，传入 yield_detail
+            self.detector = AnomalyDetector(df_yield_detail)
+            # self.detector = AIAnomalyDetector(df_yield_detail)
 
-            # 加载 MWDL 历史数据 (一次性加载到内存)
-            logger.info("⏳ 正在加载历史良损数据 (MWDL)...")
-            self.df_mwdl = self.mwdl_repo.get_processed_mwdl_data()
-            
-            # 加载明细数据 (135MB)
-            logger.info("⏳ 正在加载明细数据 (Yield Detail)...")
-            df_yield_detail = self.repo.get_yield_detail_data()
-            
-            # 2. 依赖注入 (Dependency Injection)
-            # 将明细数据注入分析器
-            self.analyzer = ConcentrationAnalyzer(df_yield_detail)
-            
-            # 将分析器注入生成器
-            self.generator = ReportGenerator(self.analyzer)
+            # 优化：其实 Detector 跑完后，Generator 可以直接用 Detector 的结果
+            from src.anomaly_monitor.core.concentration_analyzer import ConcentrationAnalyzer
+            analyzer = ConcentrationAnalyzer(df_yield_detail)
+            self.generator = HLReportGenerator(analyzer)
             
             self._is_ready = True
-            logger.info(f"✅ 服务就绪! HL数据行数: {len(self.df_hl)}, 明细数据行数: {len(df_yield_detail)}")
+            logger.info(f"✅ [Service] 资源加载完毕. HL行数: {len(self.df_hl)}")
             
         except Exception as e:
-            logger.error(f"❌ 服务启动失败: {e}", exc_info=True)
-            raise RuntimeError(f"服务初始化失败: {e}")
+            logger.error(f"❌ [Service] 初始化失败: {e}", exc_info=True)
+            raise RuntimeError(f"Service Init Failed: {e}")
+
+    def run_batch_anomaly_detection(self):
+        """
+        [核心新功能] 对 df_hl 进行批量真实性判定
+        结果会直接回写到 self.df_hl 的新列中 ('is_real_anomaly', 'anomaly_reasons')
+        """
+        if not self._is_ready or self.df_hl is None:
+            self.load_resources()
+            
+        if self.df_hl is None or self.df_hl.empty: 
+            return
+
+        logger.info("🕵️‍♂️ [Service] 开始批量执行异常真实性判定 (CT基准)...")
+        
+        is_real_list = []
+        type_list = []    # [新增]
+        reasons_list = []
+        
+        for idx, row in self.df_hl.iterrows():
+            prod = row.get('prod_code')
+            defect = row.get('defect_desc')
+            
+            df_hist_subset = pd.DataFrame()
+            if self.df_mwdl is not None:
+                # 这里还是传该产品该不良的所有历史，由 Detector 内部去筛选 CT
+                df_hist_subset = self.df_mwdl[
+                    (self.df_mwdl['prod_code'] == prod) & 
+                    (self.df_mwdl['defect_desc'] == defect)
+                ]
+            
+            if self.detector is None:
+                logger.error("❌ [Service] Detector 未初始化")
+                raise RuntimeError("Detector 未初始化")
+            decision = self.detector.check_is_real_anomaly(row, df_hist_subset)
+            
+            is_real_list.append(decision['is_real'])
+            type_list.append(decision['anomaly_type']) # [新增]
+            reasons_list.append("; ".join(decision['reasons']))
+
+        # 回写结果
+        self.df_hl['is_real_anomaly'] = is_real_list
+        self.df_hl['anomaly_type'] = type_list # [新增]
+        self.df_hl['anomaly_reasons'] = reasons_list
+        
+        # 统计日志
+        real_ct = type_list.count("真实异常")
+        real_station = type_list.count("当站超规")
+        logger.info(f"✅ 判定完成. 真实异常(CT): {real_ct}, 当站超规: {real_station}")
 
     def get_history_by_prod_defect(self, prod: str, defect: str) -> pd.DataFrame:
         """

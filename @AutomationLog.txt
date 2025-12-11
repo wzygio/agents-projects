@@ -1,0 +1,1 @@
+2025-12-10 17:23:44.047 dingtalk_sender.py[23] right_click_paste -> Find Control Timeout(3s): {ControlType: EditControl}

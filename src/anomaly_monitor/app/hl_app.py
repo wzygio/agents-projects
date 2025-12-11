@@ -54,8 +54,6 @@ def get_service():
         return None
     return service
 
-
-
 # --- 3. 主程序 ---
 def main():
     service = get_service()
@@ -63,8 +61,16 @@ def main():
         st.warning("数据未加载")
         return
 
+    # [新增] 自动执行判定 (如果还没判定过)
+    if 'is_real_anomaly' not in service.df_hl.columns:
+        with st.spinner("🤖 AI 正在逐行分析异常真实性..."):
+            service.run_batch_anomaly_detection()
+
     # ================= 🔍 修改区域：侧边栏过滤器 =================
     st.sidebar.title("📊 过滤器")
+
+    # [新增] 真实性过滤器
+    filter_real_only = st.sidebar.toggle("🤖 仅展示真实异常", value=False)
     
     # 1. 基础过滤
     show_worsening = st.sidebar.checkbox("只看恶化 (Gap > 0)", value=True)
@@ -78,7 +84,7 @@ def main():
     # 获取所有唯一站点并排序
     all_stations = ["全部"] + sorted(service.df_hl['oper_group'].astype(str).unique().tolist())
     sel_station = st.sidebar.selectbox("发生站点", all_stations)
-
+    
     # ================= 🔍 修改区域：数据过滤与排序 =================
     df_view = service.df_hl.copy()
     
@@ -91,6 +97,10 @@ def main():
         
     if sel_station != "全部":
         df_view = df_view[df_view['oper_group'] == sel_station]
+    
+    # 应用真实性过滤
+    if filter_real_only and 'is_real_anomaly' in df_view.columns:
+        df_view = df_view[df_view['is_real_anomaly'] == True]
 
     # B. 🔍 核心逻辑：自定义层级排序
     # 需求：产品(升序) -> 不良(升序) -> 站点(CT置顶)
@@ -127,6 +137,26 @@ def main():
     # --- 列配置 ---
     column_config = {
         "✅": st.column_config.CheckboxColumn("选", width="small"),
+        
+        # [新增] 使用 Tag (标签) 来区分异常类型
+        # 真实异常 = 红色/高亮，当站超规 = 黄色/普通
+        "异常类型": st.column_config.Column(
+            "异常类型",
+            width="small",
+            help="CT站点=真实异常; 非CT站点=当站超规"
+        ),
+        # [新增] 真实性列配置
+        "🤖真实性": st.column_config.CheckboxColumn(
+            "AI判定",
+            help="基于倍数、产出率、历史水位及集中性的综合判定",
+            width="small",
+            disabled=True # 只读
+        ),
+        "判定理由": st.column_config.TextColumn(
+            "判定理由",
+            width="medium",
+            help="符合判定的具体规则细节"
+        ),
         "TYPE": st.column_config.TextColumn("TYPE", width="small"),
         "prod_code": st.column_config.TextColumn("prod_code", width="small"),
         "defect_desc": st.column_config.TextColumn("defect_desc", width="medium"),

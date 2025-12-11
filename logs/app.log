@@ -1,14 +1,43 @@
-2025-12-09 21:00:05,270 [INFO] [root] 日志已初始化，写入到文件: app.log
-2025-12-09 21:00:05,271 [INFO] [root] ✅ App environment initialized successfully.
-2025-12-09 21:00:05,271 [INFO] [root] 📂 Log file: app.log
-2025-12-09 21:00:05,341 [INFO] [src.anomaly_monitor.services.hl_report_service] 🚀正在启动日报服务，加载数据资源...
-2025-12-09 21:00:05,341 [INFO] [src.anomaly_monitor.services.hl_report_service] ⏳ 正在加载异常主表数据 (HL)...
-2025-12-09 21:00:05,364 [INFO] [src.anomaly_monitor.infrastructure.hl_data_loader] ⚡ [Cache Hit] 快速加载: hl_data.parquet
-2025-12-09 21:00:05,415 [INFO] [src.anomaly_monitor.infrastructure.hl_data_loader] ⚡ [Cache Hit] 快速加载: batch_yield_data.parquet
-2025-12-09 21:00:05,518 [INFO] [src.anomaly_monitor.infrastructure.hl_data_loader] ⚡ [Cache Hit] 快速加载: hl_csv_data.parquet
-2025-12-09 21:00:05,559 [INFO] [src.anomaly_monitor.services.hl_report_service] ⏳ 正在加载历史良损数据 (MWDL)...
-2025-12-09 21:00:05,931 [INFO] [src.anomaly_monitor.infrastructure.hl_data_loader] ⚡ [Cache Hit] 快速加载: mwdl_data.parquet
-2025-12-09 21:00:05,964 [INFO] [src.anomaly_monitor.infrastructure.hl_data_loader] ⚡ [Cache Hit] 快速加载: imp_ct_dft_group.parquet
-2025-12-09 21:00:05,970 [INFO] [src.anomaly_monitor.infrastructure.hl_data_loader] ⚡ [Cache Hit] 快速加载: batch_yield_data.parquet
-2025-12-09 21:00:06,043 [INFO] [src.anomaly_monitor.services.hl_report_service] ⏳ 正在加载明细数据 (Yield Detail)...
-2025-12-09 21:00:06,083 [INFO] [src.anomaly_monitor.infrastructure.hl_data_loader] ⚡ [Cache Hit] 快速加载: ct_yield_data.parquet
+2025-12-11 10:36:21,410 [INFO] [root] 日志已初始化，写入到文件: app.log
+2025-12-11 10:36:21,411 [INFO] [root] ✅ App environment initialized successfully.
+2025-12-11 10:36:21,412 [INFO] [root] 📂 Log file: app.log
+2025-12-11 10:36:21,528 [INFO] [src.anomaly_monitor.services.hl_report_service] ⏳ [Service] 开始加载所有资源...
+2025-12-11 10:36:21,564 [INFO] [src.anomaly_monitor.infrastructure.hl_data_loader] 🐢 [Cache Miss] 读取源文件: hl_data.csv ...
+2025-12-11 10:36:21,780 [INFO] [src.anomaly_monitor.infrastructure.hl_data_loader] 💾 缓存已生成: hl_data.parquet
+2025-12-11 10:36:21,813 [INFO] [src.anomaly_monitor.infrastructure.hl_data_loader] 🐢 [Cache Miss] 读取源文件: batch_yield_data.csv ...
+2025-12-11 10:36:21,813 [INFO] [src.anomaly_monitor.infrastructure.hl_data_loader] 💾 缓存已生成: batch_yield_data.parquet
+2025-12-11 10:36:21,880 [INFO] [src.anomaly_monitor.infrastructure.hl_data_loader] ⚡ [Cache Hit] 快速加载: hl_csv_data.parquet
+2025-12-11 10:36:22,629 [INFO] [src.anomaly_monitor.infrastructure.hl_data_loader] 🐢 [Cache Miss] 读取源文件: ct_yield_data.csv ...
+2025-12-11 10:36:31,480 [INFO] [src.anomaly_monitor.infrastructure.hl_data_loader] 💾 缓存已生成: ct_yield_data.parquet
+2025-12-11 10:36:32,356 [INFO] [src.anomaly_monitor.infrastructure.hl_data_loader] 🐢 [Cache Miss] 读取源文件: mwdl_data.csv ...
+2025-12-11 10:36:32,531 [INFO] [src.anomaly_monitor.infrastructure.hl_data_loader] 💾 缓存已生成: mwdl_data.parquet
+2025-12-11 10:36:32,564 [INFO] [src.anomaly_monitor.infrastructure.hl_data_loader] 🐢 [Cache Miss] 读取源文件: imp_ct_dft_group.csv ...
+2025-12-11 10:36:32,597 [INFO] [src.anomaly_monitor.infrastructure.hl_data_loader] 💾 缓存已生成: imp_ct_dft_group.parquet
+2025-12-11 10:36:32,597 [INFO] [src.anomaly_monitor.infrastructure.hl_data_loader] ⚡ [Cache Hit] 快速加载: batch_yield_data.parquet
+2025-12-11 10:36:32,681 [INFO] [src.anomaly_monitor.services.hl_report_service] ✅ [Service] 资源加载完毕. HL行数: 58
+2025-12-11 10:36:32,683 [INFO] [src.anomaly_monitor.services.hl_report_service] 🕵️‍♂️ [Service] 开始批量执行异常真实性判定 (CT基准)...
+2025-12-11 10:36:33,258 [INFO] [src.anomaly_monitor.services.hl_report_service] ✅ 判定完成. 真实异常(CT): 7, 当站超规: 18
+2025-12-11 10:38:18,729 [INFO] [__main__] 👉 用户点击生成报告，共选中 5 条
+2025-12-11 10:38:18,749 [INFO] [__main__] ✅ 成功生成报告: Index 3
+2025-12-11 10:38:18,759 [INFO] [__main__] ✅ 成功生成报告: Index 11
+2025-12-11 10:38:18,763 [INFO] [__main__] ✅ 成功生成报告: Index 32
+2025-12-11 10:38:18,781 [INFO] [__main__] ✅ 成功生成报告: Index 46
+2025-12-11 10:38:18,790 [INFO] [__main__] ✅ 成功生成报告: Index 53
+2025-12-11 11:34:49,955 [INFO] [__main__] 👉 用户点击生成报告，共选中 5 条
+2025-12-11 11:34:50,020 [INFO] [__main__] ✅ 成功生成报告: Index 3
+2025-12-11 11:34:50,077 [INFO] [__main__] ✅ 成功生成报告: Index 11
+2025-12-11 11:34:50,104 [INFO] [__main__] ✅ 成功生成报告: Index 32
+2025-12-11 11:34:50,133 [INFO] [__main__] ✅ 成功生成报告: Index 46
+2025-12-11 11:34:50,155 [INFO] [__main__] ✅ 成功生成报告: Index 53
+2025-12-11 14:14:27,611 [INFO] [__main__] 👉 用户点击生成报告，共选中 5 条
+2025-12-11 14:14:27,646 [INFO] [__main__] ✅ 成功生成报告: Index 3
+2025-12-11 14:14:27,667 [INFO] [__main__] ✅ 成功生成报告: Index 11
+2025-12-11 14:14:27,681 [INFO] [__main__] ✅ 成功生成报告: Index 32
+2025-12-11 14:14:27,696 [INFO] [__main__] ✅ 成功生成报告: Index 46
+2025-12-11 14:14:27,709 [INFO] [__main__] ✅ 成功生成报告: Index 53
+2025-12-11 14:22:07,603 [INFO] [__main__] 👉 用户点击生成报告，共选中 5 条
+2025-12-11 14:22:07,613 [INFO] [__main__] ✅ 成功生成报告: Index 3
+2025-12-11 14:22:07,624 [INFO] [__main__] ✅ 成功生成报告: Index 11
+2025-12-11 14:22:07,633 [INFO] [__main__] ✅ 成功生成报告: Index 32
+2025-12-11 14:22:07,643 [INFO] [__main__] ✅ 成功生成报告: Index 46
+2025-12-11 14:22:07,654 [INFO] [__main__] ✅ 成功生成报告: Index 53

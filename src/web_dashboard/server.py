@@ -27,29 +27,44 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 # 配置步骤及其产物模拟
 STEPS_CONFIG = {
     "monitor": [
-        {"id": 1, "name": "数据读取 (Spotfire/Local)", "detail": "读取源文件..."},
-        {"id": 2, "name": "异常识别 (AI分析)", "detail": "AI规则判定中..."},
-        # 模拟产生一个网页链接
-        {"id": 3, "name": "报告生成 (Summary)", "detail": "数据汇总...", 
-         "mock_result": {"type": "link", "label": "View Report", "url": "https://google.com"}},
-        {"id": 4, "name": "添加到HL记录表", "detail": "写入数据库..."},
-        {"id": 5, "name": "添加到异常管理表", "detail": "更新台账..."},
-        # 模拟产生一个文件下载
-        {"id": 6, "name": "邮件通知责任人", "detail": "发送邮件...",
-         "mock_result": {"type": "file", "label": "Email_Log.eml", "url": "#"}}
+        # --- Group 1: 数据获取 ---
+        {"id": 1, "name": "Spotfire数据导出", "detail": "正在导出Spotfire数据..."},
+        {"id": 2, "name": "数据清洗与预处理", "detail": "正在Merge HL/Yield/History数据表..."},
+        
+        # --- Group 2: 判定引擎 ---
+        {"id": 3, "name": "L1: 基础筛选", "detail": "执行 Design Rule 基础过滤..."},
+        {"id": 4, "name": "L2: 历史批次分析", "detail": "对比近14天历史均值与方差..."},
+        {"id": 5, "name": "L3: 集中性分析", "detail": "调用 ConcentrationAnalyzer 算法..."},
+        
+        # --- Single: AI Agent ---
+        {"id": 6, "name": "控制台启动", "detail": "Qwen-Max 正在识别异常...", 
+         "mock_result": {"type": "link", "label": "异常监控平台", "url": "http://10.72.26.31:8506"}},
+        
+        # --- Group 3: 闭环处置 ---
+        {"id": 7, "name": "生成 HL 通报摘要", "detail": "正在生成通报摘要..."},
+        {"id": 8, "name": "写入 HL 电子台账", "detail": "Database Transaction..."},
+        {"id": 9, "name": "更新异常管理清单", "detail": "追加长期追踪项..."},
+        {"id": 10, "name": "EM通知责任人", "detail": "发送 SMTP EM..."}
     ],
     "daily_report": [
-        {"id": 1, "name": "生产报表下载", "detail": "获取数据...",
-         "mock_result": {"type": "file", "label": "Raw_Data.csv", "url": "#"}},
-        {"id": 2, "name": "PPT日报 (入库良率)", "detail": "生成幻灯片...",
-         "mock_result": {"type": "file", "label": "Yield_Report_2025.pptx", "url": "#"}},
-        {"id": 3, "name": "Excel日报 (过货影响)", "detail": "计算影响...",
-         "mock_result": {"type": "file", "label": "Shipment_Impact.xlsx", "url": "#"}},
-        {"id": 4, "name": "归档到公盘", "detail": "网络传输..."},
-        {"id": 5, "name": "截取关键指标", "detail": "生成截图..."},
-        {"id": 6, "name": "发送全员邮件", "detail": "分发中..."},
-        {"id": 7, "name": "同步至Web系统", "detail": "API同步...",
-         "mock_result": {"type": "link", "label": "Open System", "url": "https://google.com"}}
+        # --- Group 1: 数据采集 ---
+        {"id": 1, "name": "Playwright报表下载", "detail": "正在登录验证..."},
+        {"id": 2, "name": "数据清洗与预处理", "detail": "Pandas DataFrame 预处理..."},
+        
+        # --- Group 2: Excel 引擎 ---
+        {"id": 3, "name": "各产品当日数据汇总", "detail": "执行 ExcelRenderer 算法..."},
+        {"id": 4, "name": "各产品当日异常报告", "detail": "执行 ExceptionProcessor 算法...",
+         "mock_result": {"type": "link", "label": "Excel日报生成器", "url": "http://10.72.26.31:8502"}},
+        
+        # --- Group 3: PPT 引擎 ---
+        {"id": 5, "name": "画布预处理 (Canvas Prep)", "detail": "调用 PowerPoint API...",},
+        {"id": 6, "name": "数据注入与图表渲染", "detail": "调用 PowerPoint API...",
+         "mock_result": {"type": "link", "label": "PPT日报生成器", "url": "http://10.72.26.31:8501"}},
+        
+        # --- Group 4: AI & 交付 ---
+        {"id": 7, "name": "日报推送 (Email)", "detail": "调用 Outlook API..."},
+        {"id": 8, "name": "EM通知群推送", "detail": "调用 Web API..."},
+        {"id": 9, "name": "归档至公盘 (Archive)", "detail": "正在写入公盘..."}
     ]
 }
 
@@ -99,4 +114,4 @@ async def main():
 
 if __name__ == "__main__":
     # 请确保host/port与您实际环境一致
-    uvicorn.run("server:app", host="10.72.26.31", port=8505, reload=True)
+    uvicorn.run("server:app", host="10.72.26.31", port=8507, reload=True)
