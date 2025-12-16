@@ -2,12 +2,6 @@
 common:
   log_level: 'INFO'
   
-# --- 浏览器基础设施 ---
-browser:
-  headless: false
-  timeout: 30000
-  slow_mo: 50
-
 data:
   
   files:
@@ -31,7 +25,13 @@ path:
   data_raw_dir: 'D:/wzy/Python/agents-projects/data/raw'
   hl_resources_dir: '//10.71.7.15/大数据共享/12.良率监控日报自动化'
   log_dir: 'D:/wzy/Python/agents-projects/logs'
-  
+
+# --- 浏览器基础设施 ---
+browser:
+  headless: false
+  timeout: 30000
+  slow_mo: 50
+
 
 # --- 模块：日报自动化 ---
 daily_report:
@@ -41,14 +41,14 @@ daily_report:
   inputs:
     product_models: 
       - 'C471'
-      - 'C472'
-      - 'C480'
-      - 'C516'
-      - 'D172'
-      - 'M588'
-      - 'M628'
-      - 'M660'
-      - 'M678'
+      # - 'C472'
+      # - 'C480'
+      # - 'C516'
+      # - 'D172'
+      # - 'M588'
+      # - 'M628'
+      # - 'M660'
+      # - 'M678'
     reports:
       - name: 'V3屏体良率日报-A版'
         path: '目录/良率监控/综合良率'
@@ -58,6 +58,9 @@ daily_report:
         
       - name: 'V3良率及不良率By批次汇总报表'
         path: '目录/良率监控/综合良率'
+
+      - name: 'V3入库良率by品类趋势与良率管控报表'
+        skip_input: true
         
       # - name: 'V3入库良率还原By月周天报表'
       #   path: '目录/良率监控/综合良率细项'
@@ -68,9 +71,6 @@ daily_report:
       # - name: 'V3CT修正良率及不良率By月周天报表'
       #   path: '目录/良率监控/综合良率细项'
 
-      - name: 'V3屏体良率日报描述填报表'
-        skip_input: true
-
-      - name: 'V3入库良率by品类趋势与良率管控报表'
-        skip_input: true
+      # - name: 'V3屏体良率日报描述填报表'
+      #   skip_input: true
 

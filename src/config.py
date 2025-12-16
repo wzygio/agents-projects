@@ -52,11 +52,34 @@ class ConfigLoader:
     def get(self, key_path, default=None):
         keys = key_path.split(".")
         value = self._config_data
+        
         try:
-            for k in keys:
-                value = value[k]
+            for i, k in enumerate(keys):
+                # --- 调试打印开始 ---
+                # print(f"DEBUG: 正在查找 '{k}' (完整路径: {key_path})，当前上下文类型: {type(value)}")
+                # --- 调试打印结束 ---
+
+                # 如果当前值是 None，说明路径断了，直接返回 default
+                if value is None:
+                    return default
+
+                # 【关键检查】如果当前值不是字典，但我们还要继续往下找...
+                if not isinstance(value, dict):
+                    if i < len(keys): # 如果还有后续 key 要找
+                        error_msg = f"❌ 配置结构冲突! 路径 '{key_path}' 在节点 '{k}' 处中断。期望是 dict，实际是 {type(value)} (值: {value})"
+                        logging.error(error_msg)
+                        print(error_msg) # 强制打印到控制台
+                        return default
+
+                value = value.get(k)
+            
             return value
-        except (KeyError, TypeError):
+        except AttributeError as e:
+            # 这里的捕获就是为了应对 'int' object has no attribute 'get'
+            logging.error(f"❌ 发生 AttributeError (通常是把数字当字典用了): {e} | 路径: {key_path}")
+            return default
+        except Exception as e:
+            logging.error(f"读取配置异常 [{key_path}]: {e}")
             return default
 
     # =======================================================

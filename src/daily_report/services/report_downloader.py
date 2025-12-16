@@ -1,9 +1,8 @@
 # 文件路径: src/daily_report/services/report_downloader.py
-import logging
-import sys
-import os
+import sys, os, logging
 import re
 import time
+import traceback
 from pathlib import Path
 
 # 路径修正
@@ -15,6 +14,9 @@ except IndexError:
 from src.config import config, PROJECT_ROOT
 from src.common.infrastructure.browser.manager import BrowserManager
 from src.daily_report.infrastructure.web.oled_portal import OLEDPortalPage
+
+from src.common.utils.log_utils import setup_logging
+setup_logging("report_downloader.log")
 
 class DailyReportDownloader:
     
@@ -38,13 +40,35 @@ class DailyReportDownloader:
         )
 
     def start(self):
+        """启动浏览器和初始化页面对象"""
         try:
+            logging.info("正在启动 Playwright 引擎...")
             self.page = self.browser_manager.start_browser()
-            if self.page is None: raise Exception("浏览器启动失败")
+            
+            if self.page is None: 
+                raise Exception("浏览器启动失败 (self.page is None)")
+            
+            logging.info("正在初始化 OLEDPortalPage...")
+            # 【这里是崩溃的高发地】
             self.portal = OLEDPortalPage(self.page)
+            
+            if self.portal is None:
+                raise Exception("Portal 初始化失败")
+
+            logging.info("浏览器和 Portal 初始化成功")
+            
         except Exception as e:
-            logging.error(f"初始化失败: {e}")
-            raise
+            # 【核心修改】 打印完整的堆栈信息！
+            logging.error("❌❌❌ 发生致命错误！下面是详细报错位置：")
+            logging.error("="*40)
+            # 这行代码会把报错的具体行号打印出来
+            traceback.print_exc() 
+            logging.error("="*40)
+            
+            # 为了防止后面报 TargetClosedError，这里把对象置空
+            self.page = None
+            self.portal = None
+            raise e
 
     def stop(self):
         self.browser_manager.stop_browser()
@@ -58,8 +82,11 @@ class DailyReportDownloader:
         [新增] 配置自动下载监听器
         即便是在手动操作期间，只要有下载发生，这里都会自动接管并保存文件。
         """
-        # 确保下载目录存在
-
+        # 检查 page 对象是否存在
+        if self.page is None:
+            logging.error("无法设置下载监听器：page 对象为 None")
+            return
+        
         def handle_download(download):
             try:
                 # 使用建议的文件名
@@ -90,7 +117,10 @@ class DailyReportDownloader:
             # 2. 业务流程
             target_url = config.portal_url
             if target_url:
-                self.portal.navigate_to_home(target_url)
+                # 确保将 URL 转换为字符串
+                url_str = str(target_url) if not isinstance(target_url, str) else target_url
+                self.portal.navigate_to_home(url_str)
+
 
             username = config.username
             password = config.password
@@ -108,14 +138,12 @@ class DailyReportDownloader:
                 
                 try:
                     self.portal.search_and_enter_report(report_item)
-                    
-                    if should_skip_input:
-                        logging.info(f"跳过输入。")
-                    else:
-                        self.portal.fill_product_models(global_models)
-                        # 如果需要自动点查询，取消注释下一行
-                        # self.portal.click_query()
-                    
+                    if not should_skip_input:
+                        models_list = list(global_models) if isinstance(global_models, (list, tuple)) else []
+                        self.portal.fill_product_models(models_list)
+                        self.portal.click_query()
+                        self.portal.wait_for_report_load()
+                        self.portal.export_excel_original()
                     self.portal.reset_search_state()
                     time.sleep(1) 
 
@@ -131,7 +159,7 @@ class DailyReportDownloader:
         finally:
             try:
                 while True:
-                    self.page.wait_for_timeout(1000)
+                    self.page.wait_for_timeout(1000) if self.page else None
             except KeyboardInterrupt:
                 logging.info("接收到退出指令，正在关闭...")
                 self.stop()

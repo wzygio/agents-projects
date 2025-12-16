@@ -15,9 +15,6 @@ class BrowserManager:
         return cls._instance
 
     def start_browser(self) -> Page:
-        """
-        启动浏览器并返回一个新的页面对象
-        """
         if self._playwright is None:
             logging.info("正在启动 Playwright 引擎...")
             self._playwright = sync_playwright().start()
@@ -28,30 +25,30 @@ class BrowserManager:
             
             logging.info(f"正在启动浏览器 (Headless: {headless_mode})...")
             
-            # 【核心修改 1】 添加一系列参数，禁用浏览器的安全检查
-            # 这些参数能解决 .crdownload 卡住和无法下载的问题
+            # 【核心修改】 注入去安全化参数
+            # 这些参数组合在一起，可以最大程度避免 "保留/放弃" 的弹窗
             launch_args = [
-                '--start-maximized',                      # 最大化
-                '--disable-blink-features=AutomationControlled', # 试图隐藏机器人特征
-                '--safebrowsing-disable-download-protection',    # 【关键】禁用下载保护
-                '--safebrowsing-disable-extension-blacklist',    # 禁用扩展黑名单
-                '--disable-infobars',                            # 隐藏"受自动测试软件控制"条
+                '--start-maximized',
+                '--disable-blink-features=AutomationControlled',
+                '--safebrowsing-disable-download-protection',  # 禁用下载保护
+                '--safebrowsing-disable-extension-blacklist',
+                '--disable-infobars',
                 '--no-sandbox',
                 '--disable-dev-shm-usage',
             ]
 
             self._browser = self._playwright.chromium.launch(
-                channel="msedge",  # 使用 Edge
+                channel="msedge", 
                 headless=headless_mode, 
                 slow_mo=slow_mo,
-                args=launch_args,  # 注入参数
+                args=launch_args 
             )
 
         if self._context is None:
-            # 【核心修改 2】 在创建上下文时，显式允许下载
+            # 【核心修改】 在上下文层面也允许下载
             self._context = self._browser.new_context(
                 viewport={'width': 1920, 'height': 1080},
-                accept_downloads=True  # 【关键】告诉上下文：允许下载文件
+                accept_downloads=True  # 这一行至关重要
             )
         
         page = self._context.new_page()
