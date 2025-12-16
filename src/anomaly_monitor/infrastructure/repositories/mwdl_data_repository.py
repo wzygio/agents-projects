@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 import logging
-from ..hl_data_loader import HLDataLoader
+from ....common.infrastructure.hl_data_loader import HLDataLoader
 
 logger = logging.getLogger(__name__)
 

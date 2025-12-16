@@ -4,7 +4,6 @@ from pathlib import Path
 
 from src.config import config
 
-
 def setup_logging(log_filename):
     """
     初始化日志系统。

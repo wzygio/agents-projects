@@ -1,9 +1,9 @@
 # 文件路径: src/daily_report/infrastructure/web/oled_portal.py
-import logging
+import logging, time
 from playwright.sync_api import Page, Frame
 from src.config import config
+from datetime import datetime
 
-# 移除所有 Selenium 引用 (By, WebDriverWait, EC)
 
 class OLEDPortalPage:
     # 移除 driver 参数，纯 Playwright 不需要 driver
@@ -87,7 +87,7 @@ class OLEDPortalPage:
             logging.error(f"无法定位报表: {report_name}。错误: {e}")
             raise e
         
-        self.page.wait_for_timeout(5000)
+        self.page.wait_for_timeout(3000)
 
     def get_report_frame(self) -> Frame:
         """获取当前激活的报表 Iframe"""
@@ -110,6 +110,112 @@ class OLEDPortalPage:
         logging.error(error_msg)
         raise Exception(error_msg)
 
+    def set_date_to_today_if_morning(self):
+        """
+        根据时间判断是否需要重置日期。
+        【修复版】解决 Strict Mode 报错，精确点击可见的按钮。
+        """
+        
+        # 1. 获取 Frame
+        logging.info("正在初始化日期设置，准备获取报表 Frame...")
+        frame = self.get_report_frame()
+        
+        # ====== 第一部分：开始日期设置逻辑 ======
+        try:
+            # 【步骤 1】点击“开始日期”触发器
+            start_trigger = frame.locator("div[widgetname='DTSTARTDATE'] .fr-date-trigger-center")
+            
+            if start_trigger.count() > 0:
+                start_trigger.click()
+                logging.info("已点击[开始日期]触发器，等待弹窗...")
+                
+                # 【步骤 2】锁定当前可见的日期面板
+                date_panel = frame.locator("div.fr-datepicker").filter(has_text="周").locator("visible=true").first
+                date_panel.wait_for(state="visible", timeout=3000)
+
+                # 【步骤 3】执行选月逻辑
+                now = datetime.now()
+                target_month_num = now.month - 2
+                if target_month_num <= 0:
+                    target_month_num += 12
+                    
+                month_map = {
+                    1: "一月", 2: "二月", 3: "三月", 4: "四月", 5: "五月", 6: "六月",
+                    7: "七月", 8: "八月", 9: "九月", 10: "十月", 11: "十一月", 12: "十二月"
+                }
+                target_month_str = month_map[target_month_num]
+                
+                # 3.1 点击标题切换视图
+                # 同样加上 visible=true，养成好习惯
+                date_panel.locator("td.title").locator("visible=true").click()
+                self.page.wait_for_timeout(300) 
+                
+                # 3.2 点击目标月份
+                logging.info(f"正在选择月份: {target_month_str}")
+                date_panel.locator(f"td.month:has-text('{target_month_str}')").locator("visible=true").click()
+                self.page.wait_for_timeout(300)
+                
+                # 3.3 点击第一次确定 (确认月份)
+                # 【关键修复】加上 locator("visible=true")，排除隐藏的那个确定按钮
+                date_panel.locator("td.btn.ok").locator("visible=true").click()
+                self.page.wait_for_timeout(300)
+                
+                # 3.4 点击第二次确定 (关闭弹窗)
+                # 再次检查可见性并点击
+                ok_btn = date_panel.locator("td.btn.ok").locator("visible=true")
+                if ok_btn.count() > 0 and ok_btn.is_visible():
+                    ok_btn.click()
+                    # 等待弹窗消失
+                    date_panel.wait_for(state="hidden", timeout=3000)
+                
+                logging.info(f"Playwright: 已将开始日期设置为：{target_month_str}")
+                self.page.wait_for_timeout(1000) 
+
+            else:
+                logging.info("未检测到[开始日期]控件 (DTSTARTDATE)，跳过设置。")
+
+        except Exception as e:
+            logging.warning(f"设置开始日期时发生非致命错误: {e}")
+
+        # ====== 第二部分：结束日期设置逻辑 ======
+        now_hour = datetime.now().hour
+        if now_hour <= 9:
+            logging.info(f"当前时间 ({datetime.now().strftime('%H:%M')}) 早于 9:00，跳过结束日期重置。")
+            return
+
+        logging.info("当前时间晚于 9:00，开始重置[结束日期]为[今天]...")
+        
+        try:
+            # 【步骤 1】点击“结束日期”触发器
+            end_trigger = frame.locator("div[widgetname='DTENDDATE'] .fr-date-trigger-center, div[widgetname='DTDATETIME'] .fr-date-trigger-center").first
+            
+            end_trigger.wait_for(state="visible", timeout=3000)
+            end_trigger.click()
+            logging.info("已点击结束日期选择框。")
+
+            # 【步骤 2】锁定弹窗并点击“今天”
+            date_panel = frame.locator("div.fr-datepicker").filter(has_text="周").locator("visible=true").first
+            date_panel.wait_for(state="visible", timeout=3000)
+            
+            # 点击“今天”按钮 (同样加上 visible=true)
+            date_panel.locator("td.btn.today").locator("visible=true").click()
+            
+            # 【步骤 3】收尾确认
+            self.page.wait_for_timeout(500)
+            # 检查是否有残留的确定按钮需要点击
+            ok_btn = date_panel.locator("td.btn.ok").locator("visible=true")
+            if ok_btn.count() > 0 and ok_btn.is_visible():
+                 ok_btn.click()
+            
+            # 再次确认弹窗已消失
+            date_panel.wait_for(state="hidden", timeout=3000)
+            
+            logging.info("已成功设置日期为 [今天]。")
+
+        except Exception as e:
+            logging.error(f"设置日期失败: {e}")
+            raise e
+        
     def fill_product_models(self, models: list):
         """输入产品型号"""
         if not models:
@@ -133,10 +239,101 @@ class OLEDPortalPage:
             logging.error(f"填写产品型号失败: {e}")
             raise e
 
+    def fill_special_v3_criteria(self):
+        """
+        【特殊处理】V3入库良率报表的筛选逻辑 (最终修正版)
+        解决问题：
+        1. 避免定位到输入框内的 tag，而是定位下拉菜单项。
+        2. 使用 force=True 解决 pointer events intercepted (点击被拦截) 的问题。
+        """
+        logging.info("开始执行 V3报表 特殊筛选逻辑...")
+        frame = self.get_report_frame()
+
+        try:
+            # ====== 1. 处理“产品类型” (Product Type) ======
+            logging.info("正在操作：产品类型...")
+            
+            # 定位下拉三角 (使用 css 扩展语法 right-of)
+            trigger_type = frame.locator(
+                ".fr-trigger-btn-up:right-of(pre.fr-label:has-text('产品类型'), 80)"
+            ).first
+            
+            trigger_type.wait_for(state="visible", timeout=3000)
+            trigger_type.click()
+            
+            # --- 下拉菜单操作 ---
+            # 等待“全选/不选”可见
+            select_all_option = frame.get_by_text("全选/不选").first
+            select_all_option.wait_for(state="visible")
+            select_all_option.click()
+            logging.info("已点击 [产品类型] -> 全选")
+            
+            # [关键修复步骤]
+            # 1. 定位：不要只用 get_by_text，因为那会找到输入框里的 Tag。
+            #    我们要找的是带有 .fr-checkbox-checkon (已选中状态) 类的下拉选项。
+            # 2. 暴力点击：使用 force=True，跳过 Playwright 的可见性/遮挡检查，直接触发。
+            logging.info("准备取消勾选 [直板LTPS_含FIAA]...")
+            
+            exclude_item = frame.locator(".fr-checkbox-checkon").filter(has_text="直板LTPS_含FIAA").first
+            
+            # 这里的 wait_for 稍微放宽一点，只要 attached 即可，防止 visible check 失败
+            exclude_item.wait_for(state="attached", timeout=3000)
+            
+            if exclude_item.is_visible():
+                exclude_item.click(force=True)  # <--- 核心修改：强制点击
+                logging.info("已取消勾选 [直板LTPS_含FIAA]")
+            else:
+                # 如果没显示出来（可能需要滚动下拉菜单），尝试强制点击不管它显不显示
+                logging.warning("选项未完全可见，尝试强制点击...")
+                exclude_item.click(force=True)
+
+            # 点击标签收起菜单
+            frame.locator("pre.fr-label").filter(has_text="产品类型").first.click()
+            self.page.wait_for_timeout(300) 
+
+
+            # ====== 2. 处理“产品型号” (Product Model) ======
+            logging.info("正在操作：产品型号...")
+            
+            trigger_model = frame.locator(
+                ".fr-trigger-btn-up:right-of(pre.fr-label:has-text('产品型号'), 80)"
+            ).first
+            
+            trigger_model.click()
+            
+            # --- 下拉菜单操作 ---
+            frame.get_by_text("全选/不选").first.wait_for(state="visible")
+            
+            # 处理全选
+            all_select_btns = frame.get_by_text("全选/不选")
+            count = all_select_btns.count()
+            if count > 1:
+                # 倒序遍历点击，找到一个能点的就行
+                clicked = False
+                for i in range(count - 1, -1, -1):
+                    btn = all_select_btns.nth(i)
+                    if btn.is_visible():
+                        btn.click(force=True) # 这里也加上 force 比较保险
+                        clicked = True
+                        break
+                if not clicked:
+                    all_select_btns.first.click(force=True)
+            else:
+                all_select_btns.click(force=True)
+                
+            logging.info("已点击 [产品型号] -> 全选")
+            
+            # 点击标签收起菜单
+            frame.locator("pre.fr-label").filter(has_text="产品型号").first.click()
+            self.page.wait_for_timeout(300)
+
+        except Exception as e:
+            logging.error(f"V3报表特殊筛选步骤失败: {e}")
+            raise e
+        
     # ==========================================
     # 下面是重写后的 纯 Playwright 查询导出逻辑
     # ==========================================
-
     def click_query(self):
         """
         1. 点击查询按钮
@@ -167,7 +364,7 @@ class OLEDPortalPage:
             # --- 方案 A (推荐): 检测帆软特有的 heavytd 属性 ---
             # 这个属性存在于您提供的两个示例中，是报表正文单元格的强特征。
             # state="visible" 确保元素不仅存在于DOM中，而且肉眼可见
-            frame.locator("div[heavytd]").first.wait_for(state="visible", timeout=60000)
+            frame.locator("div[heavytd]").first.wait_for(state="visible", timeout=120000)
             
             # --- 方案 B (备选): 如果方案 A 超时，也可以尝试检测 id 包含行列坐标的 td ---
             # 帆软报表的 td id 通常格式为 "B1-0-xxx", "A1-0-xxx"
@@ -184,41 +381,39 @@ class OLEDPortalPage:
 
     def export_excel_original(self):
         """
-        3. 导出 -> Excel -> 原样导出
+        点击原样导出，并处理可能出现的"继续"确认按钮
         """
-        logging.info("开始执行导出操作...")
-        frame = self.get_report_frame()
         try:
-            # --- 步骤 3: 点击导出按钮 ---
-            # 对应元素 class: x-emb-export
-            logging.info("点击导出图标...")
+            # 点击导出按钮
+            frame = self.get_report_frame()
             frame.locator(".x-emb-export").click()
-
-            # --- 步骤 4: 点击 Excel 选项 ---
-            # 对应元素: <div class="menu-text">Excel</div>
-            # 注意：帆软的下拉菜单有时会渲染在 Main Frame 而不是 Iframe 里
-            # 我们先尝试在 Frame 里找，如果找不到（比如报错），逻辑可能需要调整为 self.page.locator
-            # 但根据经验，通常在同级 DOM。
-            logging.info("选择 Excel...")
-            # 使用 locator 配合 filter 精确定位
             frame.locator("div.menu-text").filter(has_text="Excel").click()
-
-            # --- 步骤 5: 点击 原样导出 选项 ---
-            # 对应元素: <div class="menu-text">原样导出</div>
-            logging.info("选择 原样导出...")
             frame.locator("div.menu-text").filter(has_text="原样导出").click()
             
-            logging.info(">> 导出指令已发送。")
+            # 等待可能出现的"继续"按钮
+            time.sleep(1)
             
+            try:
+                # 使用 Playwright 的方式定位"继续"按钮
+                continue_btn = frame.locator("span.fr-core-btn-text", has_text="继续")
+                if continue_btn.is_visible():
+                    continue_btn.click()
+                    logging.info("检测到'继续'按钮，已自动点击。")
+            except Exception:
+                # 如果找不到按钮或点击失败，忽略继续执行
+                pass
+            
+            time.sleep(1)
         except Exception as e:
-            logging.error(f"导出流程失败: {e}")
+            logging.error(f"原样导出过程中发生错误: {e}")
             raise e
+
 
     def reset_search_state(self):
         """重置搜索状态"""
         try:
             if self.page.is_visible(self.SELECTOR_CLEAR_SEARCH_BTN):
                 self.page.click(self.SELECTOR_CLEAR_SEARCH_BTN)
-                self.page.wait_for_selector(self.SELECTOR_SEARCH_ICON, state="visible", timeout=5000)
+                self.page.wait_for_selector(self.SELECTOR_SEARCH_ICON, state="visible", timeout=3000)
         except:
             pass

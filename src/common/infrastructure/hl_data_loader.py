@@ -1,7 +1,7 @@
 import pandas as pd
 import logging
 from pathlib import Path
-from src.config import ConfigLoader
+from src.config import config
 
 logger = logging.getLogger(__name__)
 
@@ -15,10 +15,10 @@ class HLDataLoader:
     注意：此类不包含任何业务逻辑 (如 Join, Calculate)。
     """
     def __init__(self):
-        self.config = ConfigLoader()
+        self.config = config
         # 使用 get 配合默认值，防止配置缺失导致崩溃
         self.input_dir = Path(str(self.config.get("path.hl_resources_dir", "./data/input")))
-        self.cache_dir = Path(str(self.config.get("path.cache_path", "./data/cache")))
+        self.cache_dir = Path(str(self.config.get("path.data_cache_path", "./data/cache")))
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
     def load_raw_dataframe(self, file_key: str) -> pd.DataFrame:
@@ -28,19 +28,6 @@ class HLDataLoader:
         """
         # 1. 获取文件名
         filename = self.config.get(f"data.files.{file_key}")
-        if not filename:
-            # 默认值兜底机制
-            defaults = {
-                'hl_raw': 'hl_data.csv',
-                'batch_yield': 'batch_yield_data.csv',
-                'hl_history': 'hl_csv_data.csv',
-                'ct_yield': 'ct_yield_data.csv',
-                'imp_ct_dft_group': 'imp_ct_dft_group_data.csv'
-            }
-            filename = defaults.get(file_key, "")
-            if not filename:
-                logger.warning(f"⚠️ 未找到文件配置: {file_key}")
-                return pd.DataFrame()
 
         csv_path = self.input_dir / filename # type: ignore
         parquet_path = self.cache_dir / (Path(str(filename)).stem + ".parquet")

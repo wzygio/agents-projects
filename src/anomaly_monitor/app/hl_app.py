@@ -17,7 +17,7 @@ from src.common.utils.app_setup import AppSetup
 # 使用 cache_resource 避免重复初始化
 @st.cache_resource
 def init_system():
-    AppSetup.initialize_app()
+    AppSetup.initialize_app("hl_app.log")
 init_system()
 
 logger = logging.getLogger(__name__)

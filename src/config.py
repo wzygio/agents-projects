@@ -22,7 +22,7 @@ else:
     logging.warning(f"未找到 .env 文件: {env_path}，将仅使用系统环境变量")
 
 class ConfigLoader:
-    # ... (这部分单例模式和 __init__ 代码保持不变) ...
+
     _instance = None
     def __new__(cls, *args, **kwargs):
         if cls._instance is None:
