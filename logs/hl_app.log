@@ -1,10 +1,25 @@
-2025-12-18 18:10:49,705 [INFO] [root] 日志已初始化，写入到文件: hl_app.log
-2025-12-18 18:10:49,705 [INFO] [root] ✅ App environment initialized successfully.
-2025-12-18 18:10:49,705 [INFO] [root] 📂 Log file: hl_app.log
-2025-12-18 18:10:49,781 [INFO] [root] 🔍 锁定目标文件: 'CT良率异常波动管理表-wzy.xlsx' (修改时间: 2025-12-18 09:31)
-2025-12-18 18:10:49,783 [INFO] [root] 🔍 锁定目标文件: '大数据值班当日新增不良HL模板-wzy.xlsx' (修改时间: 2025-12-18 09:31)
-2025-12-18 18:10:49,783 [INFO] [src.anomaly_monitor.services.hl_report_service] ⏳ [Service] 开始加载所有资源...
-2025-12-18 18:10:49,808 [INFO] [src.common.infrastructure.hl_data_loader] ⚡ [Cache Hit] 快速加载: hl_data.parquet
-2025-12-18 18:10:49,853 [INFO] [src.common.infrastructure.hl_data_loader] ⚡ [Cache Hit] 快速加载: batch_yield_data.parquet
-2025-12-18 18:10:49,916 [INFO] [src.common.infrastructure.hl_data_loader] ⚡ [Cache Hit] 快速加载: hl_csv_data.parquet
-2025-12-18 18:10:50,313 [INFO] [src.common.infrastructure.hl_data_loader] ⚡ [Cache Hit] 快速加载: ct_yield_data.parquet
+2025-12-18 18:36:57,288 [INFO] [root] 日志已初始化，写入到文件: hl_app.log
+2025-12-18 18:36:57,288 [INFO] [root] ✅ App environment initialized successfully.
+2025-12-18 18:36:57,288 [INFO] [root] 📂 Log file: hl_app.log
+2025-12-18 18:36:57,357 [INFO] [root] 🔍 锁定目标文件: 'CT良率异常波动管理表-wzy.xlsx' (修改时间: 2025-12-18 09:31)
+2025-12-18 18:36:57,359 [INFO] [root] 🔍 锁定目标文件: '大数据值班当日新增不良HL模板-wzy.xlsx' (修改时间: 2025-12-18 09:31)
+2025-12-18 18:36:57,359 [INFO] [src.anomaly_monitor.services.hl_report_service] ⏳ [Service] 开始加载所有资源...
+2025-12-18 18:36:57,380 [INFO] [src.common.infrastructure.hl_data_loader] ⚡ [Cache Hit] 快速加载: hl_data.parquet
+2025-12-18 18:36:57,423 [INFO] [src.common.infrastructure.hl_data_loader] ⚡ [Cache Hit] 快速加载: batch_yield_data.parquet
+2025-12-18 18:36:57,512 [INFO] [src.common.infrastructure.hl_data_loader] ⚡ [Cache Hit] 快速加载: hl_csv_data.parquet
+2025-12-18 18:36:57,596 [INFO] [src.common.infrastructure.hl_data_loader] ⚡ [Cache Hit] 快速加载: ct_yield_data.parquet
+2025-12-18 18:36:59,175 [INFO] [src.common.infrastructure.hl_data_loader] ⚡ [Cache Hit] 快速加载: mwdl_data.parquet
+2025-12-18 18:36:59,221 [INFO] [src.common.infrastructure.hl_data_loader] ⚡ [Cache Hit] 快速加载: imp_ct_dft_group.parquet
+2025-12-18 18:36:59,229 [INFO] [src.common.infrastructure.hl_data_loader] ⚡ [Cache Hit] 快速加载: batch_yield_data.parquet
+2025-12-18 18:36:59,306 [INFO] [src.anomaly_monitor.services.hl_report_service] ✅ [Service] 资源加载完毕. HL行数: 65
+2025-12-18 18:36:59,309 [INFO] [src.anomaly_monitor.services.hl_report_service] 🕵️‍♂️ [Service] 开始批量执行判定与报告生成...
+2025-12-18 18:36:59,927 [INFO] [src.anomaly_monitor.services.hl_report_service] ✅ 判定完成。真实异常: 3, 当站超规: 11。已生成报告草稿: 3 份。
+2025-12-18 18:36:59,935 [INFO] [__main__] ⚡ 已自动勾选 1 条真实异常
+2025-12-18 18:37:04,396 [INFO] [__main__] ⚡ 已自动勾选 1 条真实异常
+2025-12-18 18:37:04,441 [INFO] [src.anomaly_monitor.services.hl_report_service] 💾 [Service] 准备双写 1 条数据...
+2025-12-18 18:37:04,463 [INFO] [src.anomaly_monitor.infrastructure.repositories.hl_ledger_repository] 📂 [Ledger] 正在打开文件: D:\wzy\工作-值班工作\相关文件\CT良率异常波动管理表-wzy.xlsx
+2025-12-18 18:37:05,767 [INFO] [src.anomaly_monitor.infrastructure.repositories.hl_ledger_repository] 📍 [Ledger] 探测到真实数据结束于第 1212 行，将从第 1213 行写入
+2025-12-18 18:37:06,642 [INFO] [src.anomaly_monitor.infrastructure.repositories.hl_ledger_repository] ✅ 成功写入 1 条数据！(写入位置: 第 1213 - 1213 行)
+2025-12-18 18:37:06,643 [INFO] [src.anomaly_monitor.infrastructure.repositories.hl_ledger_repository] 📂 [Ledger] 正在打开文件: D:\wzy\工作-值班工作\相关文件\大数据值班当日新增不良HL模板-wzy.xlsx
+2025-12-18 18:37:08,333 [INFO] [src.anomaly_monitor.infrastructure.repositories.hl_ledger_repository] 📍 [Ledger] 探测到真实数据结束于第 358 行，将从第 359 行写入
+2025-12-18 18:37:09,793 [INFO] [src.anomaly_monitor.infrastructure.repositories.hl_ledger_repository] ✅ 成功写入 1 条数据！(写入位置: 第 359 - 359 行)

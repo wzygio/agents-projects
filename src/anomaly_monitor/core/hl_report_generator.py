@@ -97,25 +97,25 @@ class HLReportGenerator:
             impact_scope = f"影响数量 {ng_qty} pcs"
 
             # --- 4. 模板填充 (F-String) ---
-            template = f"""
-            【产品型号】{prod}
-            【不良名称】{defect_desc}
-            【发生站点】{station}
-            【是否再发】{is_recurring}
-            【首次通报】{first_report_str}
-            【基础分析】{analysis_result}
-            【异常良损】当日良损{ratio_day}，当月良损{ratio_month}，批次良损{ratio_batch}，{batch_date_short}较上批次恶化{ratio_gap}
-            【异常原因】***
-            【Inline监控】若已监控到：明确监控到的站点/RS Code/恶化比例（数字化呈现 ）；若没监控到，给出后续 Inline监控如何优化的方案
-            【是否止血】***
-            【影响范围】{impact_scope}
-            【改善措施】要求有工艺改善的落地措施，无措施时需要当天上良率会进行汇报
-            【整合对接】***
-            【责任部门】***
-            【责任科室】***
-            """
-
-            return template.strip()
+            lines = [
+                f"【产品型号】{prod}",
+                f"【不良名称】{defect_desc}",
+                f"【发生站点】{station}",
+                f"【是否再发】{is_recurring}",
+                f"【首次通报】{first_report_str}",
+                f"【基础分析】{analysis_result}",
+                f"【异常良损】当日良损{ratio_day}，当月良损{ratio_month}，批次良损{ratio_batch}，{batch_date_short}较上批次恶化{ratio_gap}",
+                f"【异常原因】***",
+                f"【Inline监控】若已监控到：明确监控到的站点/RS Code/恶化比例（数字化呈现 ）；若没监控到，给出后续 Inline监控如何优化的方案",
+                f"【是否止血】***",
+                f"【影响范围】{impact_scope}",
+                f"【改善措施】要求有工艺改善的落地措施，无措施时需要当天上良率会进行汇报",
+                f"【整合对接】***",
+                f"【责任部门】***",
+                f"【责任科室】***"
+            ]
+            
+            return "\n".join(lines)
 
         except Exception as e:
             logger.error(f"报告生成失败: {e}", exc_info=True)
