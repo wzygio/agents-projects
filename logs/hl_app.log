@@ -1,32 +1,10 @@
-2025-12-16 16:46:12,969 [INFO] [root] 日志已初始化，写入到文件: hl_app.log
-2025-12-16 16:46:12,969 [INFO] [root] ✅ App environment initialized successfully.
-2025-12-16 16:46:12,969 [INFO] [root] 📂 Log file: hl_app.log
-2025-12-16 16:46:13,016 [INFO] [src.anomaly_monitor.services.hl_report_service] ⏳ [Service] 开始加载所有资源...
-2025-12-16 16:46:13,030 [INFO] [src.anomaly_monitor.infrastructure.hl_data_loader] 🐢 [Cache Miss] 读取源文件: hl_data.csv ...
-2025-12-16 16:46:13,067 [INFO] [src.anomaly_monitor.infrastructure.hl_data_loader] 💾 缓存已生成: hl_data.parquet
-2025-12-16 16:46:13,067 [INFO] [src.anomaly_monitor.infrastructure.hl_data_loader] 🐢 [Cache Miss] 读取源文件: batch_yield_data.csv ...
-2025-12-16 16:46:13,093 [INFO] [src.anomaly_monitor.infrastructure.hl_data_loader] 💾 缓存已生成: batch_yield_data.parquet
-2025-12-16 16:46:13,133 [INFO] [src.anomaly_monitor.infrastructure.hl_data_loader] 🐢 [Cache Miss] 读取源文件: hl_csv_data.csv ...
-2025-12-16 16:46:13,197 [INFO] [src.anomaly_monitor.infrastructure.hl_data_loader] 💾 缓存已生成: hl_csv_data.parquet
-2025-12-16 16:46:13,260 [INFO] [src.anomaly_monitor.infrastructure.hl_data_loader] 🐢 [Cache Miss] 读取源文件: ct_yield_data.csv ...
-2025-12-16 16:46:21,283 [INFO] [src.anomaly_monitor.infrastructure.hl_data_loader] 💾 缓存已生成: ct_yield_data.parquet
-2025-12-16 16:46:21,904 [INFO] [src.anomaly_monitor.infrastructure.hl_data_loader] 🐢 [Cache Miss] 读取源文件: mwdl_data.csv ...
-2025-12-16 16:46:22,033 [INFO] [src.anomaly_monitor.infrastructure.hl_data_loader] 💾 缓存已生成: mwdl_data.parquet
-2025-12-16 16:46:22,050 [INFO] [src.anomaly_monitor.infrastructure.hl_data_loader] 🐢 [Cache Miss] 读取源文件: imp_ct_dft_group.csv ...
-2025-12-16 16:46:22,067 [INFO] [src.anomaly_monitor.infrastructure.hl_data_loader] 💾 缓存已生成: imp_ct_dft_group.parquet
-2025-12-16 16:46:22,067 [INFO] [src.anomaly_monitor.infrastructure.hl_data_loader] ⚡ [Cache Hit] 快速加载: batch_yield_data.parquet
-2025-12-16 16:46:22,147 [INFO] [src.anomaly_monitor.services.hl_report_service] ✅ [Service] 资源加载完毕. HL行数: 35
-2025-12-16 16:46:22,150 [INFO] [src.anomaly_monitor.services.hl_report_service] 🕵️‍♂️ [Service] 开始批量执行异常真实性判定 (CT基准)...
-2025-12-16 16:46:22,417 [INFO] [src.anomaly_monitor.services.hl_report_service] ✅ 判定完成. 真实异常(CT): 1, 当站超规: 5
-2025-12-16 16:46:52,139 [INFO] [__main__] 👉 用户点击生成报告，共选中 1 条
-2025-12-16 16:46:52,150 [INFO] [__main__] ✅ 成功生成报告: Index 2
-2025-12-16 16:48:28,705 [INFO] [__main__] 👉 用户点击生成报告，共选中 1 条
-2025-12-16 16:48:28,722 [INFO] [__main__] ✅ 成功生成报告: Index 2
-2025-12-16 16:50:06,292 [INFO] [__main__] 👉 用户点击生成报告，共选中 1 条
-2025-12-16 16:50:06,311 [INFO] [__main__] ✅ 成功生成报告: Index 2
-2025-12-16 16:52:22,962 [INFO] [__main__] 👉 用户点击生成报告，共选中 1 条
-2025-12-16 16:52:22,972 [INFO] [__main__] ✅ 成功生成报告: Index 2
-2025-12-16 16:54:46,963 [INFO] [__main__] 👉 用户点击生成报告，共选中 1 条
-2025-12-16 16:54:46,974 [INFO] [__main__] ✅ 成功生成报告: Index 2
-2025-12-16 16:58:20,231 [INFO] [__main__] 👉 用户点击生成报告，共选中 1 条
-2025-12-16 16:58:20,247 [INFO] [__main__] ✅ 成功生成报告: Index 2
+2025-12-18 18:10:49,705 [INFO] [root] 日志已初始化，写入到文件: hl_app.log
+2025-12-18 18:10:49,705 [INFO] [root] ✅ App environment initialized successfully.
+2025-12-18 18:10:49,705 [INFO] [root] 📂 Log file: hl_app.log
+2025-12-18 18:10:49,781 [INFO] [root] 🔍 锁定目标文件: 'CT良率异常波动管理表-wzy.xlsx' (修改时间: 2025-12-18 09:31)
+2025-12-18 18:10:49,783 [INFO] [root] 🔍 锁定目标文件: '大数据值班当日新增不良HL模板-wzy.xlsx' (修改时间: 2025-12-18 09:31)
+2025-12-18 18:10:49,783 [INFO] [src.anomaly_monitor.services.hl_report_service] ⏳ [Service] 开始加载所有资源...
+2025-12-18 18:10:49,808 [INFO] [src.common.infrastructure.hl_data_loader] ⚡ [Cache Hit] 快速加载: hl_data.parquet
+2025-12-18 18:10:49,853 [INFO] [src.common.infrastructure.hl_data_loader] ⚡ [Cache Hit] 快速加载: batch_yield_data.parquet
+2025-12-18 18:10:49,916 [INFO] [src.common.infrastructure.hl_data_loader] ⚡ [Cache Hit] 快速加载: hl_csv_data.parquet
+2025-12-18 18:10:50,313 [INFO] [src.common.infrastructure.hl_data_loader] ⚡ [Cache Hit] 快速加载: ct_yield_data.parquet

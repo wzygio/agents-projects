@@ -14,50 +14,47 @@ from src.anomaly_monitor.infrastructure.repositories.mwdl_data_repository import
 
 # 导入核心业务逻辑
 from src.anomaly_monitor.core.hl_report_generator import HLReportGenerator
+from src.anomaly_monitor.core.concentration_analyzer import ConcentrationAnalyzer
 from src.anomaly_monitor.core.anomaly_detector import AnomalyDetector
-from src.anomaly_monitor.core.ai_anomaly_detector import AIAnomalyDetector
+from src.anomaly_monitor.infrastructure.repositories.hl_ledger_repository import HLLedgerRepository
 
 # 设置日志
 logger = logging.getLogger(__name__)
 
 class HLReportService:
     def __init__(self):
-        # Repositories
         self.hl_repo = HLDataRepository()
         self.mwdl_repo = MWDLDataRepository()
         
-        # Core Components
+        # Components
+        self.detector: Optional[AnomalyDetector] = None
         self.generator: Optional[HLReportGenerator] = None
-        self.detector: Optional[AnomalyDetector] = None # [新增]
-        # self.detector: Optional[AIAnomalyDetector] = None # 类型更新
+        self.ledger_repo = HLLedgerRepository("daily_report.hl_ledger")
+        self.record_repo = HLLedgerRepository("daily_report.record_ledger")
 
-        # Data Cache
+        # Data
         self.df_hl: Optional[pd.DataFrame] = None
         self.df_mwdl: Optional[pd.DataFrame] = None
         self._is_ready = False
 
     def load_resources(self):
-        """
-        加载所有必要数据并初始化核心组件
-        """
+        """加载资源并初始化所有组件"""
         logger.info("⏳ [Service] 开始加载所有资源...")
-        
         try:
-            # 1. 加载数据 (Infrastructure Layer)
+            # 1. 加载数据
             self.df_hl = self.hl_repo.get_processed_hl_data()
-            df_yield_detail = self.hl_repo.get_yield_detail_data() # 获取明细数据用于集中性分析
-            self.df_mwdl = self.mwdl_repo.get_processed_mwdl_data() # 获取历史数据用于对比
+            df_yield_detail = self.hl_repo.get_yield_detail_data()
+            self.df_mwdl = self.mwdl_repo.get_processed_mwdl_data()
             
-            # 2. 初始化核心组件 (Core Layer)
-            # Generator 需要 Analyzer，Detector 也需要 Analyzer (或内部集成)
-            # 这里我们在 Detector 内部实例化了 Analyzer，传入 yield_detail
+            # 2. 初始化核心组件
+            # Shared Analyzer (复用同一个分析器实例，节省内存)
+            shared_analyzer = ConcentrationAnalyzer(df_yield_detail)
+            
+            # Detector (注入分析器)
             self.detector = AnomalyDetector(df_yield_detail)
-            # self.detector = AIAnomalyDetector(df_yield_detail)
-
-            # 优化：其实 Detector 跑完后，Generator 可以直接用 Detector 的结果
-            from src.anomaly_monitor.core.concentration_analyzer import ConcentrationAnalyzer
-            analyzer = ConcentrationAnalyzer(df_yield_detail)
-            self.generator = HLReportGenerator(analyzer)
+            
+            # Generator (注入分析器 - 用于兜底)
+            self.generator = HLReportGenerator(shared_analyzer) # [新增]
             
             self._is_ready = True
             logger.info(f"✅ [Service] 资源加载完毕. HL行数: {len(self.df_hl)}")
@@ -68,51 +65,83 @@ class HLReportService:
 
     def run_batch_anomaly_detection(self):
         """
-        [核心新功能] 对 df_hl 进行批量真实性判定
-        结果会直接回写到 self.df_hl 的新列中 ('is_real_anomaly', 'anomaly_reasons')
+        [核心升级] 批量判定 + 自动报告草拟
         """
-        if not self._is_ready or self.df_hl is None:
+        if not self.detector:
             self.load_resources()
-            
-        if self.df_hl is None or self.df_hl.empty: 
+        if not self.detector:
+            raise RuntimeError("Failed to initialize anomaly detector")
+        if self.df_hl is None or self.df_hl.empty:
+            logger.warning("⚠️ HL数据未加载或为空，无法执行批量检测")
             return
 
-        logger.info("🕵️‍♂️ [Service] 开始批量执行异常真实性判定 (CT基准)...")
+
+        logger.info("🕵️‍♂️ [Service] 开始批量执行判定与报告生成...")
         
+        # 结果容器
         is_real_list = []
-        type_list = []    # [新增]
+        type_list = []
         reasons_list = []
-        
+        report_draft_list = []
+
+        count_real = 0
+        count_station = 0
+        count_generated = 0
+
         for idx, row in self.df_hl.iterrows():
             prod = row.get('prod_code')
             defect = row.get('defect_desc')
+            current_station = str(row.get('oper_group')).strip()
             
+            # 1. 准备历史数据
             df_hist_subset = pd.DataFrame()
             if self.df_mwdl is not None:
-                # 这里还是传该产品该不良的所有历史，由 Detector 内部去筛选 CT
+                # 简单筛选，性能优化点
                 df_hist_subset = self.df_mwdl[
                     (self.df_mwdl['prod_code'] == prod) & 
                     (self.df_mwdl['defect_desc'] == defect)
                 ]
             
-            if self.detector is None:
-                logger.error("❌ [Service] Detector 未初始化")
-                raise RuntimeError("Detector 未初始化")
+            # 2. 执行判定 (Detector)
             decision = self.detector.check_is_real_anomaly(row, df_hist_subset)
             
-            is_real_list.append(decision['is_real'])
-            type_list.append(decision['anomaly_type']) # [新增]
-            reasons_list.append("; ".join(decision['reasons']))
+            # 提取结果
+            is_real = decision['is_real']
+            a_type = decision.get('anomaly_type', '')
+            reasons = "; ".join(decision.get('reasons', []))
+            
+            # 存入列表
+            is_real_list.append(is_real)
+            type_list.append(a_type)
+            reasons_list.append(reasons)
+            
+            # 统计
+            if a_type == '真实异常': count_real += 1
+            if a_type == '当站超规': count_station += 1
+            
+            # 3. 自动草拟报告
+            if a_type == '真实异常':
+                pre_calc_conc = decision.get('conc_text', None)
+                
+                # 直接调用！传入 full_df=self.df_hl，让 Generator 自己去查
+                draft = self.generator.generate_text( # type: ignore
+                    row, 
+                    pre_calc_conc_text=pre_calc_conc,
+                    full_df=self.df_hl  # 👈 关键：传入全量数据
+                )
+                
+                report_draft_list.append(draft)
+                count_generated += 1
+            else:
+                report_draft_list.append("")
 
-        # 回写结果
+        # 4. 批量回写 DataFrame
         self.df_hl['is_real_anomaly'] = is_real_list
-        self.df_hl['anomaly_type'] = type_list # [新增]
+        self.df_hl['anomaly_type'] = type_list
         self.df_hl['anomaly_reasons'] = reasons_list
+        self.df_hl['generated_report'] = report_draft_list # [新增] 这一列将直接展示在 UI 上供编辑
         
-        # 统计日志
-        real_ct = type_list.count("真实异常")
-        real_station = type_list.count("当站超规")
-        logger.info(f"✅ 判定完成. 真实异常(CT): {real_ct}, 当站超规: {real_station}")
+        logger.info(f"✅ 判定完成。真实异常: {count_real}, 当站超规: {count_station}。已生成报告草稿: {count_generated} 份。")
 
     def get_history_by_prod_defect(self, prod: str, defect: str) -> pd.DataFrame:
         """
@@ -180,89 +209,69 @@ class HLReportService:
         return df_sorted.drop(columns=['_station_rank', '_date_type_rank'])
 
 
-    def generate_reports(self, 
-                         only_worsening: bool = True, 
-                         min_batch_gap: float = 0.0) -> List[Dict]:
+    def commit_reports_to_ledger(self, selected_df: pd.DataFrame) -> tuple[bool, str]:
         """
-        执行日报生成任务
-        
-        :param only_worsening: 是否只看恶化的批次 (batch_gap > 0)
-        :param min_batch_gap: 恶化阈值，默认 > 0 即生成
-        :return: 包含生成的报告文本和元数据的列表
+        [交互确认] 将数据双写到两个 Excel 文件 (带数据清洗)
         """
-        if not self._is_ready or self.df_hl is None:
-            self.load_resources()
+        if selected_df.empty:
+            return False, "❌ 未选择任何需要录入的异常行"
 
-        if self.df_hl is None or self.df_hl.empty:
-            logger.warning("⚠️ 没有 HL 数据，无法生成报告。")
-            return []
-
-
-        reports = []
+        # 1. 预检查
+        status1, msg1 = self.ledger_repo.check_file_status()
+        if not status1: return False, f"[HL台账] {msg1}"
         
-        # 1. 筛选数据
-        # 根据业务规则过滤: 例如只看 Gap > 0 的项
-        target_df = self.df_hl.copy()
-        
-        if only_worsening:
-            # 确保 batch_gap 是数字
-            if 'batch_gap' in target_df.columns:
-                target_df = target_df[target_df['batch_gap'] > min_batch_gap]
-            else:
-                logger.warning("⚠️ batch_gap 字段缺失，跳过筛选。")
+        status2, msg2 = self.record_repo.check_file_status()
+        if not status2: return False, f"[汇总表] {msg2}"
 
-        # 按批次恶化程度降序排列，优先展示最严重的
-        if 'batch_gap' in target_df.columns:
-            target_df = target_df.sort_values('batch_gap', ascending=False)
+        logger.info(f"💾 [Service] 准备双写 {len(selected_df)} 条数据...")
 
-        logger.info(f"📊 开始生成报告，待处理条目: {len(target_df)}")
+        # =========================================================
+        # 🛠️ [核心修改] 数据清洗与预处理 (Data Cleaning)
+        # =========================================================
+        # 我们不直接 to_dict，而是先创建一个清洗后的副本
+        df_clean = selected_df.copy()
 
-        # 2. 循环生成
-        for index, row in target_df.iterrows():
-            try:
-                # 调用 Generator 生成文本
-                report_text = self.generator.generate_text(row) if self.generator else "生成器未初始化"
-                
-                # 收集结果
-                item = {
-                    "id": index,
-                    "prod": row.get('prod_code'),
-                    "defect": row.get('defect_desc'),
-                    "batch": row.get('batch'),
-                    "gap": row.get('batch_gap', 0),
-                    "text": report_text
-                }
-                reports.append(item)
-                
-            except Exception as e:
-                logger.error(f"❌ 生成单条报告失败 (Prod: {row.get('prod_code')}): {e}")
-                continue
-
-        logger.info(f"✅ 生成完成，共生成 {len(reports)} 份报告。")
-        return reports
-
-# --- 调试入口 (Main) ---
-if __name__ == "__main__":
-    # 配置简单的日志输出以便调试
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-    
-    service = HLReportService()
-    
-    try:
-        # 1. 运行生成
-        # 这里的 min_batch_gap=0.001 代表只看恶化超过 0.1% 的
-        results = service.generate_reports(only_worsening=True, min_batch_gap=0.001)
-        
-        print("\n" + "="*50)
-        print(f"🎉 成功生成 {len(results)} 份异常通报")
-        print("="*50 + "\n")
-        
-        # 2. 打印前 2 份看看效果
-        for report in results[:2]:
-            print(f"📄 报告预览 [{report['prod']} - {report['defect']}]:")
-            print("-" * 30)
-            print(report['text'])
-            print("-" * 30 + "\n")
+        # 1. 清洗日期格式 (B列)
+        # 目标格式: 2025/12/03 10:00 (YYYY/MM/DD HH:mm)
+        if 'interface_time' in df_clean.columns:
+            def clean_date(val):
+                try:
+                    # 尝试转为 datetime 对象
+                    dt = pd.to_datetime(val)
+                    # 格式化字符串
+                    return dt.strftime('%Y/%m/%d %H:%M')
+                except:
+                    # 如果转换失败，保留原样或截取前16位
+                    return str(val)[:16]
             
-    except Exception as e:
-        print(f"❌ 运行出错: {e}")
+            df_clean['interface_time'] = df_clean['interface_time'].apply(clean_date)
+
+        # 2. 强制数值类型 (解决 H 列百分比显示问题)
+        # 确保 ratio 相关列是 float 类型，而不是 string
+        # 如果是 float，Excel 的样式复制功能会自动把它显示为 %
+        ratio_cols = ['ratio', 'month_ratio', 'week_ratio', 'batch_ratio']
+        for col in ratio_cols:
+            if col in df_clean.columns:
+                # coerce 将无法转换的变为 NaN，fillna(0) 填补空值
+                df_clean[col] = pd.to_numeric(df_clean[col], errors='coerce').fillna(0)
+
+        # 3. 转换数据
+        records = df_clean.to_dict('records')
+        # =========================================================
+
+        # 3. 执行写入
+        # 写入文件 A
+        ok1, res1 = self.ledger_repo.append_records(records)
+        if not ok1: 
+            return False, f"写入HL台账失败: {res1}"
+            
+        # 写入文件 B
+        ok2, res2 = self.record_repo.append_records(records)
+        if not ok2:
+            return True, f"⚠️ HL台账写入成功，但汇总表写入失败: {res2}"
+
+        # 4. 全部成功
+        final_msg = f"✅ 双写成功！\n1. HL台账: {res1}\n2. 汇总表: {res2}"
+        return True, final_msg
+    
+

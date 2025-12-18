@@ -8,10 +8,9 @@ from pathlib import Path
 try:
     sys.path.append(str(Path(__file__).resolve().parents[3]))
 except IndexError: pass
-
 # --- 1. 初始化系统环境 ---
 from src.anomaly_monitor.services.hl_report_service import HLReportService
-from src.anomaly_monitor.app.charts.hl_app_charts import COLUMN_MAPPING, prepare_display_data
+from src.anomaly_monitor.app.charts.hl_app_charts import MWDL_COLUMN_MAPPING, COLUMN_CONFIG, prepare_display_data
 from src.common.utils.app_setup import AppSetup
 
 # 使用 cache_resource 避免重复初始化
@@ -30,19 +29,6 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# 1. 增加 MWDL 的列映射 (用于下方列表展示)
-MWDL_COLUMN_MAPPING = {
-    "defect_desc": "defect_desc",
-    "prod_code": "prod_code",
-    "oper_group": "oper_group",
-    "date_value": "date_value", # 批次号
-    "ratio_val": "ratio_fanel", # 我们清洗过的数值列，显示为百分比
-    "ng_qty": "ng_qty",
-    "input_qty": "input_qty",
-    "defect_group": "defect_group", # Join 来的
-    "lot_input_ratio": "lot_input_ratio" # Join 来的
-}
-
 # --- 1. Service 加载 ---
 @st.cache_resource(show_spinner="正在连接数据仓库...")
 def get_service():
@@ -56,21 +42,38 @@ def get_service():
 
 # --- 3. 主程序 ---
 def main():
+    # ====================================================
+    #                   1. 初始化
+    # ====================================================
+    """
+    主函数，用于执行异常监控系统的核心功能。
+    包括数据加载、异常检测、数据过滤、排序展示和报告生成等功能。
+    """
+    # 获取服务对象
     service = get_service()
     if not service or service.df_hl is None:
         st.warning("数据未加载")
         return
+
+    # st.write("🔍 当前可用字段:", service.df_hl.columns.tolist())
 
     # [新增] 自动执行判定 (如果还没判定过)
     if 'is_real_anomaly' not in service.df_hl.columns:
         with st.spinner("🤖 AI 正在逐行分析异常真实性..."):
             service.run_batch_anomaly_detection()
 
-    # ================= 🔍 修改区域：侧边栏过滤器 =================
+    # ====================================================
+    #                   2. 数据过滤
+    # ====================================================
+    # 2.1 侧边栏过滤器
     st.sidebar.title("📊 过滤器")
 
-    # [新增] 真实性过滤器
-    filter_real_only = st.sidebar.toggle("🤖 仅展示真实异常", value=False)
+    # [修改] 拆分为两个独立的筛选器，控制粒度更细
+    filter_mode = st.sidebar.radio(
+        "🤖 异常筛选模式",
+        options=["全部显示", "仅看真实异常 (CT)", "仅看当站超规"],
+        index=0 # 默认为全部显示，或者您可以改为 1
+    )
     
     # 1. 基础过滤
     show_worsening = st.sidebar.checkbox("只看恶化 (Gap > 0)", value=True)
@@ -85,7 +88,7 @@ def main():
     all_stations = ["全部"] + sorted(service.df_hl['oper_group'].astype(str).unique().tolist())
     sel_station = st.sidebar.selectbox("发生站点", all_stations)
     
-    # ================= 🔍 修改区域：数据过滤与排序 =================
+    # 2.2 应用数据过滤与排序
     df_view = service.df_hl.copy()
     
     # A. 应用过滤
@@ -99,20 +102,23 @@ def main():
         df_view = df_view[df_view['oper_group'] == sel_station]
     
     # 应用真实性过滤
-    if filter_real_only and 'is_real_anomaly' in df_view.columns:
-        df_view = df_view[df_view['is_real_anomaly'] == True]
+    if filter_mode == "仅看真实异常 (CT)":
+        if 'anomaly_type' in df_view.columns:
+            df_view = df_view[df_view['anomaly_type'] == '真实异常']
+            
+    elif filter_mode == "仅看当站超规":
+        if 'anomaly_type' in df_view.columns:
+            df_view = df_view[df_view['anomaly_type'] == '当站超规']
 
     # B. 🔍 核心逻辑：自定义层级排序
     # 需求：产品(升序) -> 不良(升序) -> 站点(CT置顶)
     if not df_view.empty:
-        # 1. 创建辅助列：如果是 CT 赋值 0，其他赋值 1
-        # 使用 upper() 确保大小写不敏感
+        # 1. 创建辅助列：如果是 CT 赋值 0，其他赋值 1；使用 upper() 确保大小写不敏感
         df_view['_station_rank'] = df_view['oper_group'].astype(str).apply(
             lambda x: 0 if x.upper().strip() == 'CT' else 1
         )
         
-        # 2. 执行排序
-        # 优先级: 产品 -> 不良 -> 站点权重 -> 恶化程度(作为最后的Tie-breaker，可选)
+        # 2. 执行排序：优先级: 产品 -> 不良 -> 站点权重 -> 恶化程度(作为最后的Tie-breaker，可选)
         sort_cols = ['prod_code', 'defect_desc', '_station_rank', 'batch_gap']
         ascending_order = [True, True, True, False] # 产品升, 不良升, 权重升(0在1前), Gap降
         
@@ -129,65 +135,43 @@ def main():
         # 3. 删除辅助列 (不展示给用户)
         df_view = df_view.drop(columns=['_station_rank'])
 
-    # ==========================================================
-
+    # ====================================================
+    #                   3. 数据展示
+    # ====================================================
     # 准备展示数据
     df_display = prepare_display_data(df_view)
 
-    # --- 列配置 ---
-    column_config = {
-        "✅": st.column_config.CheckboxColumn("选", width="small"),
+    # [核心修改 1] 从表格配置中移除 "generated_report"，保持表格清爽
+    current_col_config = COLUMN_CONFIG.copy()
+    
+    if "✅" in df_display.columns and "异常类型" in df_display.columns:
+        # 使用 Pandas 的布尔索引进行批量赋值
+        # 将 '异常类型' 为 '真实异常' 的行，其 '✅' 列设为 True
+        mask_real = df_display["异常类型"] == "真实异常"
+        df_display.loc[mask_real, "✅"] = True
         
-        # [新增] 使用 Tag (标签) 来区分异常类型
-        # 真实异常 = 红色/高亮，当站超规 = 黄色/普通
-        "异常类型": st.column_config.Column(
-            "异常类型",
-            width="small",
-            help="CT站点=真实异常; 非CT站点=当站超规"
-        ),
-        # [新增] 真实性列配置
-        "🤖真实性": st.column_config.CheckboxColumn(
-            "AI判定",
-            help="基于倍数、产出率、历史水位及集中性的综合判定",
-            width="small",
-            disabled=True # 只读
-        ),
-        "判定理由": st.column_config.TextColumn(
-            "判定理由",
-            width="medium",
-            help="符合判定的具体规则细节"
-        ),
-        "TYPE": st.column_config.TextColumn("TYPE", width="small"),
-        "prod_code": st.column_config.TextColumn("prod_code", width="small"),
-        "defect_desc": st.column_config.TextColumn("defect_desc", width="medium"),
-        "oper_group": st.column_config.TextColumn("oper_group", width="small"), # 确保站点列宽度合适
-        "批次恶化": st.column_config.TextColumn("批次恶化", width="large"),
-        "日良损": st.column_config.NumberColumn("日良损", format="%.2f%%"),
-        "CT月": st.column_config.NumberColumn("CT月", format="%.2f%%"),
-        "CT周": st.column_config.NumberColumn("CT周", format="%.2f%%"),
-        "本批次": st.column_config.NumberColumn("本批次", format="%.2f%%"),
-        "本批次-上批次": st.column_config.NumberColumn("本批次-上批次", format="%.2f%%"),
-        "批次产出率": st.column_config.NumberColumn("批次产出率", format="%.1f%%"),
-        "倍数": st.column_config.NumberColumn("倍数", format="%.2f%%"),
-        "HL次数": st.column_config.NumberColumn("HL次数", format="%d"),
-        "ng_qty": st.column_config.NumberColumn("ng_qty", format="%d"),
-        "最新HL时间": st.column_config.DatetimeColumn("最新HL时间", format="YYYY/MM/DD HH:mm"),
-        "HL原因": st.column_config.TextColumn("HL原因")
-    }
+        # 调试日志
+        auto_checked_count = mask_real.sum()
+        if auto_checked_count > 0:
+            logger.info(f"⚡ 已自动勾选 {auto_checked_count} 条真实异常")
+
+    # [可选优化] 如果表格数据太多，自动勾选后可能想把它们排到最前面？
+    df_display = df_display.sort_values(by=["✅"], ascending=False)
 
     st.subheader("🛡️ 异常监控列表 (Spotfire 视图)")
     
-    # 渲染表格
+    # 渲染表格 (主表只负责勾选)
     edited_df = st.data_editor(
         df_display,
-        column_config=column_config,
+        column_config=current_col_config,
         hide_index=True,
         use_container_width=True,
         height=600,
-        disabled=df_display.columns.drop("✅")
+        # 禁用除勾选框以外的所有列编辑
+        disabled=df_display.columns.drop("✅") 
     )
 
-    # 逻辑：当且仅当用户【勾选了唯一的 1 行】时，才展示历史趋势
+    # 获取勾选行
     selected_rows = edited_df[edited_df["✅"] == True]
     
     if len(selected_rows) == 1:
@@ -211,7 +195,6 @@ def main():
             df_hist_display = df_history[cols_show].rename(columns=MWDL_COLUMN_MAPPING)
             
             # === 🔍 新增：MWDL 百分比修正 ===
-            # 这里对应的是 'ratio_fanel' (即 ratio_val) 和 'lot_input_ratio'
             mwdl_pct_cols = ["ratio_fanel", "lot_input_ratio"]
             for col in mwdl_pct_cols:
                 if col in df_hist_display.columns:
@@ -240,27 +223,99 @@ def main():
     elif len(selected_rows) > 1:
         st.info("💡 请仅勾选 1 行以查看其详细历史趋势。")
     
-    # 生成报告逻辑
-    selected_rows = edited_df[edited_df["✅"] == True]
+    # ====================================================
+    #             4. 报告生成与写入区域 (核心重构)
+    # ====================================================
+    
     if not selected_rows.empty:
         st.divider()
-        if st.button(f"🚀 生成 {len(selected_rows)} 条报告", type="primary"):
-            logger.info(f"👉 用户点击生成报告，共选中 {len(selected_rows)} 条")
-            for idx in selected_rows.index:
-                try:
-                    # 使用原始索引反查数据
-                    raw_row = service.df_hl.loc[idx]
-                    report = service.generator.generate_text(raw_row) # type: ignore
-                    
-                    # 标题展示增加站点信息
-                    header_text = f"{raw_row.get('prod_code')} - {raw_row.get('defect_desc')} ({raw_row.get('oper_group')})"
-                    
-                    with st.expander(header_text, expanded=True):
-                        st.text_area("内容", report, height=300, key=f"rpt_{idx}")
+        st.subheader("📝 异常通报与台账录入")
+        
+        # 使用 Session State 管理编辑后的文本，防止重绘丢失
+        if "report_drafts" not in st.session_state:
+            st.session_state["report_drafts"] = {}
 
-                    logger.info(f"✅ 成功生成报告: Index {idx}")
-                except Exception as e:
-                    logger.error(f"❌ 生成失败: {e}")
+        # 布局：左边是操作按钮，右边或者是下方是编辑器
+        # 这里我们采用“逐个展示编辑器”的模式
+        
+        # 收集待提交的数据
+        data_to_commit = [] 
+        
+        # 遍历选中的每一行
+        for idx in selected_rows.index:
+            try:
+                # 1. 回溯到原始 df_hl 获取完整信息
+                # 注意：这里务必使用 .loc[idx]，因为 idx 是原始索引
+                raw_row = service.df_hl.loc[idx]
+                
+                prod = raw_row.get('prod_code')
+                defect = raw_row.get('defect_desc')
+                station = raw_row.get('oper_group')
+                
+                # 2. 获取 AI 预生成的草稿
+                # get() 方法第二个参数是默认值，如果字段不存在则返回 ''
+                ai_draft = raw_row.get('generated_report', '')
+                
+                # 3. [核心修复] 兜底生成逻辑 (含孪生站点查找)
+                if not ai_draft or pd.isna(ai_draft) or str(ai_draft).strip() == "":
+                    ai_draft = service.generator.generate_text( # type: ignore
+                        raw_row, 
+                        full_df=service.df_hl # 👈 关键：复用 Service 中的全量数据
+                    )
+                    
+                # 4. 标题展示
+                header_text = f"📄 {prod} - {defect} ({station})"
+                
+                with st.expander(header_text, expanded=True):
+                    # 5. 文本编辑器
+                    text_key = f"rpt_edit_{idx}"
+                    
+                    # 优先使用用户刚才编辑过的缓存，没有则使用 ai_draft (无论是预生成的还是现生成的)
+                    default_text = st.session_state["report_drafts"].get(text_key, ai_draft)
+                    
+                    user_text = st.text_area(
+                        "通报内容 (可编辑)", 
+                        value=default_text, 
+                        height=250, 
+                        key=text_key
+                    )
+                    
+                    # 更新缓存
+                    st.session_state["report_drafts"][text_key] = user_text
+                    
+                    # 准备提交数据
+                    record = raw_row.to_dict()
+                    record['generated_report'] = user_text 
+                    data_to_commit.append(record)
 
+            except Exception as e:
+                st.error(f"处理行 {idx} 时发生错误: {e}")
+                logger.error(f"UI Error processing row {idx}: {e}", exc_info=True)
+
+        # --- 提交按钮区域 ---
+        st.write("") # Spacer
+        col_submit, col_info = st.columns([1, 4])
+        
+        with col_submit:
+            if st.button("💾 确认并写入台账", type="primary", use_container_width=True):
+                if not data_to_commit:
+                    st.warning("没有数据可写入")
+                else:
+                    with st.spinner(f"正在写入 {len(data_to_commit)} 条数据到 Excel..."):
+                        # 将 list[dict] 转回 DataFrame 传给 Service
+                        df_commit = pd.DataFrame(data_to_commit)
+                        
+                        # 调用 Service
+                        success, msg = service.commit_reports_to_ledger(df_commit)
+                        
+                        if success:
+                            st.balloons()
+                            st.success(msg)
+                            # 可选：写入成功后清空勾选？这需要重置 key，比较复杂，暂不处理
+                        else:
+                            st.error(msg)
+                            
+        with col_info:
+            st.caption(f"共选中 {len(data_to_commit)} 条。点击按钮后，上述文本将写入 HL 台账 Excel。")
 if __name__ == "__main__":
     main()

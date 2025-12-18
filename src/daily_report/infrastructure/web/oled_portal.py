@@ -113,7 +113,7 @@ class OLEDPortalPage:
     def set_date_to_today_if_morning(self):
         """
         根据时间判断是否需要重置日期。
-        【修复版】解决 Strict Mode 报错，精确点击可见的按钮。
+        【修复版 V2】通过指定 table.mt (月视图) 和 table.dt (日视图) 来区分两个“确定”按钮。
         """
         
         # 1. 获取 Frame
@@ -131,7 +131,7 @@ class OLEDPortalPage:
                 
                 # 【步骤 2】锁定当前可见的日期面板
                 date_panel = frame.locator("div.fr-datepicker").filter(has_text="周").locator("visible=true").first
-                date_panel.wait_for(state="visible", timeout=3000)
+                date_panel.wait_for(state="visible", timeout=5000)
 
                 # 【步骤 3】执行选月逻辑
                 now = datetime.now()
@@ -146,27 +146,29 @@ class OLEDPortalPage:
                 target_month_str = month_map[target_month_num]
                 
                 # 3.1 点击标题切换视图
-                # 同样加上 visible=true，养成好习惯
-                date_panel.locator("td.title").locator("visible=true").click()
+                # 标题通常在日视图头部，但也可能在月视图，这里一般点 dt 里的即可，或者通用
+                date_panel.locator("td.title").first.click()
                 self.page.wait_for_timeout(300) 
                 
                 # 3.2 点击目标月份
+                # 月份肯定在 table.mt 里
                 logging.info(f"正在选择月份: {target_month_str}")
-                date_panel.locator(f"td.month:has-text('{target_month_str}')").locator("visible=true").click()
+                date_panel.locator(f"table.mt td.month:has-text('{target_month_str}')").click()
                 self.page.wait_for_timeout(300)
                 
                 # 3.3 点击第一次确定 (确认月份)
-                # 【关键修复】加上 locator("visible=true")，排除隐藏的那个确定按钮
-                date_panel.locator("td.btn.ok").locator("visible=true").click()
+                # 【核心修复】指定 table.mt (Month Table) 下的确定按钮
+                # 这样就绝对不会点到后面 table.dt 的按钮了
+                date_panel.locator("table.mt td.btn.ok").click()
                 self.page.wait_for_timeout(300)
                 
                 # 3.4 点击第二次确定 (关闭弹窗)
-                # 再次检查可见性并点击
-                ok_btn = date_panel.locator("td.btn.ok").locator("visible=true")
-                if ok_btn.count() > 0 and ok_btn.is_visible():
-                    ok_btn.click()
+                # 此时应该回到了日视图，我们指定 table.dt (Date Table) 下的确定按钮
+                ok_btn_final = date_panel.locator("table.dt td.btn.ok")
+                if ok_btn_final.is_visible():
+                    ok_btn_final.click()
                     # 等待弹窗消失
-                    date_panel.wait_for(state="hidden", timeout=3000)
+                    date_panel.wait_for(state="hidden", timeout=5000)
                 
                 logging.info(f"Playwright: 已将开始日期设置为：{target_month_str}")
                 self.page.wait_for_timeout(1000) 
@@ -189,26 +191,26 @@ class OLEDPortalPage:
             # 【步骤 1】点击“结束日期”触发器
             end_trigger = frame.locator("div[widgetname='DTENDDATE'] .fr-date-trigger-center, div[widgetname='DTDATETIME'] .fr-date-trigger-center").first
             
-            end_trigger.wait_for(state="visible", timeout=3000)
+            end_trigger.wait_for(state="visible", timeout=30000)
             end_trigger.click()
             logging.info("已点击结束日期选择框。")
 
             # 【步骤 2】锁定弹窗并点击“今天”
             date_panel = frame.locator("div.fr-datepicker").filter(has_text="周").locator("visible=true").first
-            date_panel.wait_for(state="visible", timeout=3000)
+            date_panel.wait_for(state="visible", timeout=5000)
             
-            # 点击“今天”按钮 (同样加上 visible=true)
-            date_panel.locator("td.btn.today").locator("visible=true").click()
+            # 点击“今天”按钮 (今天按钮只存在于日视图 table.dt 中)
+            date_panel.locator("table.dt td.btn.today").click()
             
             # 【步骤 3】收尾确认
             self.page.wait_for_timeout(500)
-            # 检查是否有残留的确定按钮需要点击
-            ok_btn = date_panel.locator("td.btn.ok").locator("visible=true")
-            if ok_btn.count() > 0 and ok_btn.is_visible():
+            # 检查 table.dt 下是否有残留的确定按钮
+            ok_btn = date_panel.locator("table.dt td.btn.ok")
+            if ok_btn.is_visible():
                  ok_btn.click()
             
             # 再次确认弹窗已消失
-            date_panel.wait_for(state="hidden", timeout=3000)
+            date_panel.wait_for(state="hidden", timeout=5000)
             
             logging.info("已成功设置日期为 [今天]。")
 
