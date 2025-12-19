@@ -7,8 +7,8 @@ from pathlib import Path
 from openpyxl import load_workbook
 from xml.etree import ElementTree as ET
 
-from excel_generator_project.utils.utils import Utils # 假设您的文本处理函数在这里
-from excel_generator_project.config import TEMP_DIR
+from utils.local_utils import Utils # 假设您的文本处理函数在这里
+from packages.excel_engine.src.config import TEMP_DIR
 
 # 预定义XML命名空间
 NAMESPACES = {

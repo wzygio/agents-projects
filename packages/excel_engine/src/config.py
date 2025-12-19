@@ -1,81 +1,63 @@
-# 文件路径：packages/excel_engine/src/config.py
+# 文件路径：src\excel_generator_project\config.py
 import yaml
 from pathlib import Path
-import logging
+import sys, os, logging
 from typing import Dict, Any
 
-# --- 1. 路径定义 (基于当前文件位置) ---
-# 当前文件在: packages/excel_engine/src/config.py
-# 所以 .parent 是 src, .parent.parent 是 excel_engine (包根目录)
-SRC_ROOT = Path(__file__).resolve().parent
-PACKAGE_ROOT = SRC_ROOT.parent 
-# 假设 workspace 结构：workspace_root/packages/excel_engine
-WORKSPACE_ROOT = PACKAGE_ROOT.parent.parent 
+# --- 1. 基础设置与加载 ---
+# 添加项目根目录到系统路径，以便导入模块
+try:
+    SRC_ROOT = Path(__file__).resolve().parent.parent
+    PROJECT_ROOT = SRC_ROOT.parent
+except NameError:
+    PROJECT_ROOT = Path.cwd()
+    SRC_ROOT = PROJECT_ROOT / "src"
+    logging.warning(f"__file__ 未定义，假定项目根目录为: {PROJECT_ROOT}")
 
-# 定义全局资源目录 (假设在 workspace 根目录下的 assets 或 config)
-# 您可以根据实际情况修改这里，指向 shared_kernel 或 workspace root
-GLOBAL_CONFIG_DIR = WORKSPACE_ROOT / "config"
-GLOBAL_ASSETS_DIR = WORKSPACE_ROOT / "assets"
+CONFIG_FILE = PROJECT_ROOT / "config" / "config.yaml"
+CONFIG: Dict[str, Any] = {}
 
-CONFIG_FILE = GLOBAL_CONFIG_DIR / "config.yaml"
+def load_config(
+    config_path: Path = CONFIG_FILE,
+    ) -> Dict[str, Any]:
+    """
+    加载、处理并返回完整的配置字典。
+    这是一个纯粹的工具函数，不产生任何全局副作用。
+    """
+    loaded_config = {} # 初始化为空字典
 
-def load_config(config_path: Path = CONFIG_FILE) -> Dict[str, Any]:
-    """加载 YAML 配置"""
-    loaded_config = {}
-    
-    # 默认值
-    loaded_config['paths'] = {
-        'base_dir': str(WORKSPACE_ROOT),
-        'output_dir': str(WORKSPACE_ROOT / "output"), # 默认输出目录
-        'log_dir': str(WORKSPACE_ROOT / "logs")
-    }
-
+    # 1. 加载 YAML 文件 (如果存在)
     try:
         if config_path.is_file():
             with open(config_path, 'r', encoding='utf-8') as f:
                 yaml_config = yaml.safe_load(f)
                 if isinstance(yaml_config, dict):
-                    # 深度合并或更新
-                    # 这里做简单的 update，实际可能需要 deep_merge
-                    if 'paths' in yaml_config:
-                        loaded_config['paths'].update(yaml_config['paths'])
-                    loaded_config.update({k: v for k, v in yaml_config.items() if k != 'paths'})
-                logging.info(f"YAML 配置已加载: {config_path}")
+                     loaded_config.update(yaml_config) # 合并 YAML 配置
+                logging.info(f"YAML 配置文件已成功加载: {config_path}")
         else:
-            logging.warning(f"YAML 配置未找到: {config_path}，将使用默认路径")
+            logging.warning(f"YAML 配置文件未找到: {config_path}")
     except Exception as e:
-        logging.error(f"加载配置文件出错: {e}")
+        logging.error(f"加载或解析 YAML 文件 {config_path} 时出错: {e}")
 
-    return loaded_config
+    yaml_config['paths']['base_dir'] = str(PROJECT_ROOT)
 
-# --- 2. 初始化配置单例 ---
+    return yaml_config
+
 CONFIG = load_config()
 
-# --- 3. 导出常用路径常量 ---
+# --- 2. 导出配置常量 ---
 PATHS = CONFIG.get("paths", {})
+RESOURCES_DIR = PROJECT_ROOT / Path(PATHS.get("resources_dir", ""))
+TEMP_DIR = PROJECT_ROOT / Path(PATHS.get("temp_dir", ""))
+LOG_DIR = PROJECT_ROOT / Path(PATHS.get("log_dir", ""))
+OUTPUT_DIR = PROJECT_ROOT / Path(PATHS.get("output_dir", ""))
 
-# 辅助函数：解析路径（如果是绝对路径则保持，如果是相对路径则相对于 WORKSPACE_ROOT）
-def resolve_path(path_str: str, default_root: Path) -> Path:
-    if not path_str:
-        return Path(".")
-    p = Path(path_str)
-    if p.is_absolute():
-        return p
-    return default_root / p
+TEMPLATE_FILE = RESOURCES_DIR / Path(PATHS.get("template_file", ""))
+TEMP_FILE = OUTPUT_DIR / Path(PATHS.get("temp_file", ""))
+OUTPUT_FILE = OUTPUT_DIR / Path(PATHS.get("output_file", ""))
 
-LOG_DIR = resolve_path(PATHS.get("log_dir", "logs"), WORKSPACE_ROOT)
-OUTPUT_DIR = resolve_path(PATHS.get("output_dir", "output"), WORKSPACE_ROOT)
+DOWNLOADER_SCRIPT_PATH = Path(PATHS.get("downloader_script_path", ""))
+DOWNLOADER_PYTHON_EXECUTABLE = Path(PATHS.get("downloader_python_executable", ""))
 
-# 模板文件通常在 assets 里
-TEMPLATE_PATH = resolve_path(PATHS.get("template_file", "template.xlsx"), GLOBAL_ASSETS_DIR)
-# 临时文件放在 output 里
-TEMP_PATH = OUTPUT_DIR / "temp_report.xlsx"
-OUTPUT_PATH = OUTPUT_DIR / "final_report.xlsx"
-
-# 确保目录存在
-LOG_DIR.mkdir(parents=True, exist_ok=True)
-OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-
-# [保留] 下载器脚本路径 (如果下载器还没重构，暂时保留)
-DOWNLOADER_SCRIPT_PATH = resolve_path(PATHS.get("downloader_script_path", ""), WORKSPACE_ROOT)
-DOWNLOADER_PYTHON_EXECUTABLE = Path(PATHS.get("downloader_python_executable", "python"))
+CONTENT_GENERATOR_SCRIPT_PATH = Path(PATHS.get("content_generator_script_path", ""))
+STYLE_GENERATOR_SCRIPT_PATH = Path(PATHS.get("style_generator_script_path", ""))

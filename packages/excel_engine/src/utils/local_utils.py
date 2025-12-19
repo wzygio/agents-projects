@@ -12,7 +12,9 @@ from openpyxl import load_workbook
 from openpyxl.styles import Alignment
 from typing import Optional
 
-from excel_generator_project.config import PROJECT_ROOT, RESOURCES_DIR, LOG_DIR, RESOURCES_DIR
+from packages.excel_engine.src.config import PROJECT_ROOT, RESOURCES_DIR, LOG_DIR, RESOURCES_DIR
+
+# Utils类 - 工具函数集合
 class Utils:
     @staticmethod
     def setup_logging(log_filename: str = "app.log"):
