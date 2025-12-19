@@ -8,6 +8,7 @@ from openpyxl import load_workbook
 from xml.etree import ElementTree as ET
 
 from utils.local_utils import Utils # 假设您的文本处理函数在这里
+from core.text_parser import default_text_parser
 from packages.excel_engine.src.config import TEMP_DIR
 
 # 预定义XML命名空间
@@ -96,7 +97,7 @@ class FontProcessor:
             title_definitions = job_config.get('title_definitions', [])
             is_hierarchical = title_definitions and 'sub_definitions' in title_definitions[0]
             if is_hierarchical:
-                fragments = Utils.parse_fragments_hierarchical(text_content, title_definitions, default_style)
+                fragments = default_text_parser.parse_fragments_hierarchical(text_content, title_definitions, default_style)
             else:
                 fragments = Utils.parse_fragments_flat(text_content, title_definitions, default_style)
             
@@ -190,11 +191,11 @@ class _RichTextXMLHelper:
             # 智能判断：根据片段数量选择不同的写入方法
             if len(args_for_writing) > 2:
                 # 如果有多个片段（真正的富文本），使用 write_rich_string
-                worksheet.write_rich_string('A1', *args_for_writing)
+                worksheet.write_rich_string('A1', *args_for_writing) # type: ignore
             elif len(args_for_writing) == 2:
                 # 如果只有一个片段，使用更基础的 write 方法，它没有“至少两个片段”的限制
                 # args_for_writing 在这里是 [format_object, text_string]
-                worksheet.write('A1', args_for_writing[1], args_for_writing[0])
+                worksheet.write('A1', args_for_writing[1], args_for_writing[0]) # type: ignore
             # 如果 args_for_writing 为空，则什么也不写入，创建一个空文件是符合预期的
             
             workbook.close()
@@ -349,7 +350,8 @@ class _RichTextXMLHelper:
             workbook = xlsxwriter.Workbook(style_donor_file)
             worksheet = workbook.add_worksheet()
             cell_format = workbook.add_format(style_properties)
-            worksheet.write('A1', 'dummy', cell_format) # 写入带样式的虚拟内容
+            # 写入带样式的虚拟内容
+            worksheet.write('A1', 'dummy', cell_format) # type: ignore
             workbook.close()
 
             # 2. 解压 donor 文件并从中提取 's' 属性

@@ -25,7 +25,7 @@ class ReportGenerator:
         # 生成器也需要产品型号列表来确保写入顺序
         self.product_models = Utils.extract_product_models(config.get('model_definitions', []))
         logging.info("ReportGenerator 初始化成功。")
-
+    
     def run(self):
         """
         主调度方法，负责完整的“文件准备 -> 任务执行 -> 文件保存”流程。
@@ -148,7 +148,7 @@ class ReportGenerator:
                     wrap_text=True, vertical='top', horizontal='left'
                 )
                 
-    # --- 新增的任务执行方法 ---
+
     def _execute_write_summary_reports(self, job_config: dict):
         """
         将 DataProcessor 准备好的摘要数据，填充模板并写入到Excel中。

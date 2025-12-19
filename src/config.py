@@ -1,94 +1,118 @@
-# 文件路径: src/config.py
-from pathlib import Path
-from typing import Dict, Any, Optional
-import yaml
+import os
+from typing import List, Dict, Optional, Any
 from pydantic import BaseModel, Field
-from pydantic_settings import BaseSettings, SettingsConfigDict, PydanticBaseSettingsSource
 
-# --- 1. 定义路径 ---
-# 自动定位项目根目录
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+# --- 1. 定义基类：包含您的“方案一”魔法 ---
+class BaseConfig(BaseModel):
+    """
+    所有配置类的基类。
+    包含 __getattr__ 用于处理未定义的字段，防止编辑器爆红，
+    同时允许代码在读取 YAML 中新增的临时字段时不报错。
+    """
+    def __getattr__(self, item) -> Any:
+        # 这里可以选择返回 None，或者打印一个警告，或者直接 pass
+        # 这样写之后，访问 config.path.undefined_field 不会报红线，只会返回 None
+        return None
 
-# --- 2. 定义 YAML 读取器 (这是 Pydantic 支持 YAML 的标准写法) --- 
-class YamlConfigSettingsSource(PydanticBaseSettingsSource):
-    """自定义源：让 Pydantic 能够读取 config/config.yaml"""
-    def get_field_value(self, field: Field, field_name: str) -> tuple[Any, str, bool]: # type: ignore
-        return super().get_field_value(field, field_name)
+# --- 2. 定义各个子模块的配置模型 ---
 
-    def __call__(self) -> Dict[str, Any]:
-        # 尝试读取 config.yaml
-        config_file = PROJECT_ROOT / "config" / "anomaly_monitor_config.yaml"
-        if not config_file.exists():
-            return {}
-        
-        with open(config_file, encoding="utf-8") as f:
-            return yaml.safe_load(f) or {}
+class CommonConfig(BaseConfig):
+    log_level: str = 'INFO'
+    HEADLESS_MODE: bool = True
 
-# --- 3. 定义数据模型 (The "What") ---
-# 对应 YAML 中的 browser: 节点
-class BrowserConfig(BaseModel):
+class DataFilesConfig(BaseConfig):
+    hl_raw: str
+    batch_yield: str
+    hl_history: str
+    ct_yield: str
+    mwdl_raw: str = ''  # 给个默认值，因为 YAML 注释说可选
+    defect_group_dict: str
+
+class DataColumnsConfig(BaseConfig):
+    prod_code: str = 'prod_code'
+    defect_desc: str = 'defect_desc'
+    batch: str = 'batch'
+
+class DataConfig(BaseConfig):
+    files: DataFilesConfig
+    columns: DataColumnsConfig
+
+class PathConfig(BaseConfig):
+    input_path: str
+    data_cache_path: str
+    data_raw_dir: str
+    # 重点：这里显式声明了 hl_resources_dir，VS Code 绝对不会再报错了！
+    hl_resources_dir: str 
+    log_dir: str
+
+class BrowserConfig(BaseConfig):
     headless: bool = False
     timeout: int = 30000
     slow_mo: int = 50
 
-# 对应 YAML 中的 path: 节点
-class PathConfig(BaseModel):
-    data_raw_dir: str = "data/raw"
-    data_input_dir: str = "data/input"
-    log_dir: str = "logs"
-    # 如果 YAML 里没有，这里可以写默认值
+# --- 日报模块的复杂结构 ---
 
-# 对应 YAML 中的 daily_report: 节点
-class DailyReportConfig(BaseModel):
-    portal_url: str = ""
-    inputs: Dict[str, Any] = {} # 复杂结构可以先用 Dict，或者继续定义子 Model
+class LedgerMapping(BaseConfig):
+    # 使用 Dict[str, str] 来接收 A: "generated_report" 这种映射
+    # 或者如果不确定 key，也可以用 extra='allow'
+    # 这里我们定义通用映射，如果字段不固定，Pydantic 默认允许额外字段
+    pass 
 
-# --- 4. 主配置类 (整合所有) ---
-class AppConfig(BaseSettings):
-    # 嵌套模型
-    browser: BrowserConfig = BrowserConfig()
-    path: PathConfig = PathConfig()
-    daily_report: DailyReportConfig = DailyReportConfig()
+class LedgerConfig(BaseConfig):
+    path: str
+    file_name: str
+    sheet_name: str
+    mapping: Dict[str, str] # 对应 YAML 中的 A: value, B: value...
+
+class ReportItem(BaseConfig):
+    name: str
+    path: Optional[str] = None # 有些报表可能暂时没配路径
+
+class DailyReportInputs(BaseConfig):
+    product_models: List[str]
+    reports: List[ReportItem]
+
+class DailyReportConfig(BaseConfig):
+    portal_url: str
+    record_ledger: LedgerConfig
+    hl_ledger: LedgerConfig
+    inputs: DailyReportInputs
+
+# --- 3. 最终的全局配置类 ---
+
+class AppConfig(BaseConfig):
+    common: CommonConfig
+    data: DataConfig
+    path: PathConfig
+    browser: BrowserConfig
+    daily_report: DailyReportConfig
+
+# ==========================================================
+# 加载逻辑 (单例模式)
+# ==========================================================
+import yaml
+
+_config_instance: Optional[AppConfig] = None
+
+def load_config(yaml_path: str = "config.yaml") -> AppConfig:
+    """读取 YAML 并转换为强类型的 AppConfig 对象"""
+    global _config_instance
     
-    # 顶层配置 (直接从环境变量读取)
-    # Field(alias=...) 允许你用不同的名字映射环境变量
-    mes_username: Optional[str] = Field(default=None, alias="MES_USERNAME")
-    mes_password: Optional[str] = Field(default=None, alias="MES_PASSWORD")
-    
-    # 全局快捷属性 (Computed Properties)
-    @property
-    def project_root(self) -> Path:
-        return PROJECT_ROOT
+    if _config_instance:
+        return _config_instance
 
-    # 配置 Pydantic 的行为
-    model_config = SettingsConfigDict(
-        env_file=PROJECT_ROOT / ".env", # 同时也读取 .env
-        env_file_encoding='utf-8',
-        extra='ignore' # 忽略 YAML 里多余的未知字段，不报错
-    )
+    if not os.path.exists(yaml_path):
+        raise FileNotFoundError(f"配置文件未找到: {yaml_path}")
 
-    # 注册我们刚才写的 YAML 读取器
-    @classmethod
-    def settings_customise_sources(
-        cls,
-        settings_cls: type[BaseSettings],
-        init_settings: PydanticBaseSettingsSource,
-        env_settings: PydanticBaseSettingsSource,
-        dotenv_settings: PydanticBaseSettingsSource,
-        file_secret_settings: PydanticBaseSettingsSource,
-    ) -> tuple[PydanticBaseSettingsSource, ...]:
-        return (
-            init_settings,
-            env_settings,     # 优先级 1: 环境变量
-            dotenv_settings,  # 优先级 2: .env 文件
-            YamlConfigSettingsSource(settings_cls), # 优先级 3: config.yaml
-        )
+    with open(yaml_path, 'r', encoding='utf-8') as f:
+        raw_data = yaml.safe_load(f)
 
-# --- 5. 实例化 (单例模式) ---
-# 在这里直接实例化，其他文件 import 这个 config 对象即可
-try:
-    config = AppConfig()
-except Exception as e:
-    # 如果配置校验失败（比如必填项缺失），启动时就会直接报错，避免运行时才崩溃
-    print(f"❌ 严重错误: 配置加载失败! {e}")
-    raise
+    # Pydantic 会自动验证类型并填充数据
+    _config_instance = AppConfig(**raw_data)
+    return _config_instance
+
+# 为了方便在其他文件直接导入使用
+# 使用方法： from config import config
+# 注意：这需要确保 config.yaml 在工作目录下，或者在 main 中先调用 load_config
+# 这里为了不报错，先设为 None，由您在主程序入口初始化
+config: AppConfig = None # type: ignore

@@ -7,12 +7,13 @@ import tempfile
 from pathlib import Path
 
 # --- 1. 导入重构后的模块 ---
-from packages.excel_engine.src.config import CONFIG, TEMPLATE_PATH, TEMP_PATH, DOWNLOADER_SCRIPT_PATH, DOWNLOADER_PYTHON_EXECUTABLE
+from packages.excel_engine.src.config import config, TEMPLATE_FILE, TEMP_FILE, PROJECT_ROOT
 from interface.components.app_utils import AppUtils # 原 AppSetup
 # 导入 UseCases (核心业务逻辑)
 from application.generate_report import GenerateReportUseCase
 from application.refine_styles import RefineStylesUseCase
 
+# --- 2. 初始化系统 ---
 from packages.common_utils.src.infrastructure.app_setup import AppSetup
 
 # 使用 cache_resource 避免重复初始化
@@ -22,6 +23,9 @@ def init_system():
 init_system()
 
 logger = logging.getLogger(__name__)
+
+DOWNLOADER_SCRIPT_PATH = PROJECT_ROOT / Path(config.paths.downloader_script_path)
+DOWNLOADER_PYTHON_EXECUTABLE = Path(config.paths.downloader_python_executable)
 
 # ==========================================================
 # --- Streamlit UI 界面 ---
@@ -89,16 +93,16 @@ tab1, tab2 = st.tabs(["生成基础日报", "渲染日报样式"])
 # ==========================================================
 with tab1:
     st.header("生成基础日报")
-    st.info(f"默认模板路径: {TEMPLATE_PATH}")
+    st.info(f"默认模板路径: {TEMPLATE_FILE}")
     
     uploaded_template_file = st.file_uploader("📥 上传新模板 (可选)", type=['xlsx'], key="initial_template_uploader")
     
     # 模板准备
-    current_template_path = TEMPLATE_PATH
+    current_template_path = TEMPLATE_FILE
     if uploaded_template_file:
         # 保存上传的模板
         try:
-            AppUtils.save_uploaded_file(uploaded_template_file, TEMPLATE_PATH)
+            AppUtils.save_uploaded_file(uploaded_template_file, TEMPLATE_FILE)
             st.success(f"已使用上传的模板覆盖默认模板")
         except Exception as e:
             st.error(f"模板保存失败: {e}")
@@ -109,13 +113,13 @@ with tab1:
             try:
                 # 1. 初始化用例
                 st.write("⚙️ 初始化生成引擎...")
-                use_case = GenerateReportUseCase(CONFIG)
+                use_case = GenerateReportUseCase(config)
                 
                 # 2. 执行用例 (Direct Call!)
                 st.write("🏃‍♂️ 正在处理数据与写入Excel...")
                 use_case.execute(
                     template_path=current_template_path,
-                    output_path=TEMP_PATH
+                    output_path=TEMP_FILE
                 )
                 
                 status.update(label="✅ 生成成功!", state="complete", expanded=False)
@@ -128,15 +132,15 @@ with tab1:
                 st.session_state.step1_success = False
 
     # --- 结果展示 ---
-    if st.session_state.step1_success and TEMP_PATH.exists():
+    if st.session_state.step1_success and TEMP_FILE.exists():
         st.divider()
         st.subheader("✅ 基础日报已就绪")
         
-        with open(TEMP_PATH, "rb") as file:
+        with open(TEMP_FILE, "rb") as file:
             st.download_button(
                 label="📥 下载中间文件",
                 data=file,
-                file_name=TEMP_PATH.name,
+                file_name=TEMP_FILE.name,
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 use_container_width=True
             )
@@ -154,11 +158,11 @@ with tab2:
     target_input_path = None
     if uploaded_intermediate_file:
         target_input_path = uploaded_intermediate_file
-    elif st.session_state.step1_success and TEMP_PATH.exists():
+    elif st.session_state.step1_success and TEMP_FILE.exists():
         st.info("检测到上一步生成的临时文件，将默认使用该文件。")
         # 这里逻辑稍微特殊，如果没上传，就用 TEMP_PATH，但 UseCase 需要路径
         # 为了安全，我们通常建议用户显式上传，或者拷贝一份
-        target_input_path = TEMP_PATH
+        target_input_path = TEMP_FILE
 
     if st.button("🎨 渲染最终样式", type="primary", use_container_width=True, key="gen_final_report_btn", disabled=not target_input_path):
         
@@ -174,7 +178,7 @@ with tab2:
                 # 如果是 UploadedFile 对象，需要保存
                 AppUtils.save_uploaded_file(uploaded_intermediate_file, input_file_path)
             else:
-                # 如果是 Path 对象 (TEMP_PATH)，直接复制
+                # 如果是 Path 对象 (TEMP_FILE)，直接复制
                 import shutil
                 shutil.copy(target_input_path, input_file_path) # type: ignore
 
@@ -182,7 +186,7 @@ with tab2:
             with st.status("正在应用样式...", expanded=True) as status:
                 try:
                     st.write("🖌️ 初始化字体处理器...")
-                    style_use_case = RefineStylesUseCase(CONFIG)
+                    style_use_case = RefineStylesUseCase(config)
                     
                     st.write("💅 正在注入富文本与对齐样式...")
                     style_use_case.execute(

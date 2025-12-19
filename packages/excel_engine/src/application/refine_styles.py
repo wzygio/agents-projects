@@ -8,7 +8,7 @@ from packages.excel_engine.src.utils.local_utils import Utils
 from packages.excel_engine.src.infrastructure.processor.font_processor import FontProcessor
 
 class RefineStylesUseCase:
-    def __init__(self, config: dict):
+    def __init__(self, config):
         self.config = config
 
     def execute(self, input_path: Path, output_path: Path):

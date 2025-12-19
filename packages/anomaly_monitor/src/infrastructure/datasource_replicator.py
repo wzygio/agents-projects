@@ -12,7 +12,7 @@ from src.config import config
 
 # ================= 配置区域 =================
 # 共享盘路径 (源头)
-HL_RESOURCES_DIR = Path(str(config.get("path.hl_resources_dir")))
+HL_RESOURCES_DIR = Path(str(config.path.hl_resources_dir))
 
 # 关键文件名 (根据你的截图和日志推断)
 FILES = {
