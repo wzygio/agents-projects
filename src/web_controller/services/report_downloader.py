@@ -13,8 +13,8 @@ except IndexError:
     pass 
 
 from src.config import config, PROJECT_ROOT
-from src.common.utils.log_utils import setup_logging 
-from src.common.infrastructure.hl_data_loader import HLDataLoader
+from packages.common_utils.src.infrastructure.logger import setup_logging 
+from packages.anomaly_monitor.src.infrastructure.loader import HLDataLoader
 from src.web_controller.infrastructure.web.oled_portal import OLEDPortalPage
 
 # 初始化模块级日志记录器

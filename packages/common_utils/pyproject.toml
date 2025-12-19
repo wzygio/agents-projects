@@ -1,0 +1,17 @@
+[project]
+name = "common_utils"
+version = "0.1.0"
+description = "Shared kernel utilities and infrastructure for all agents"
+requires-python = ">=3.10"
+dependencies = [
+    "loguru",         # 假设您用 loguru，如果用标准库可删
+    "pandas>=2.0.0",  # csv_parquet.py 可能需要
+    "pyyaml"          # app_setup.py 可能需要读取配置
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
