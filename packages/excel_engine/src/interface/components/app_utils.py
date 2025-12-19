@@ -7,18 +7,9 @@ import subprocess
 import time, logging, shutil
 from typing import Optional
 
-from excel_generator_project.config import TEMPLATE_PATH, TEMP_PATH, PROJECT_ROOT
 from packages.excel_engine.src.utils.local_utils import Utils
 
-class AppSetup:
-    @staticmethod
-    def initialize_app():
-        """
-        初始化应用的日志系统。
-        """
-        Utils.setup_logging("app.log")
-        logging.info("Application setup complete (logging initialized).")
-
+class AppUtils:
     @staticmethod
     def save_uploaded_file(uploaded_file, save_path: Path):
         """(已更新为先删除后保存的模式) 保存上传的文件到指定路径"""
@@ -60,32 +51,3 @@ class AppSetup:
         else: # 16:00 - 23:59
             # 规则3: 16点及以后，固定为16:00 (注意使用全角冒号)
             return f"V3屏体良率日报-{date_str}-16：00.xlsx"
-
-    @staticmethod
-    def run_subprocess(script_path: str, 
-                    python_executable: str, # <-- 新增参数
-                    template_path: Optional[str] = None, # 设为可选
-                    output_path: Optional[str] = None):  # 设为可选
-        """(已重构) 一个通用的、用于执行后台脚本的函数，允许指定Python解释器。"""
-        st.info(f"正在执行脚本: {Path(script_path).name}...")
-        
-        process_env = os.environ.copy()
-        # 只有在提供了路径时才添加到环境变量
-        if template_path:
-            st.write(f"  - 输入文件: {template_path}")
-            process_env["TEMPLATE_PATH"] = str(template_path)
-        if output_path:
-            st.write(f"  - 输出文件: {output_path}")
-            process_env["OUTPUT_PATH"] = str(output_path)
-            
-        process_env["PYTHONPATH"] = os.environ.get("PYTHONPATH", "") + os.pathsep + str(PROJECT_ROOT)
-        process_env["PYTHONUTF8"] = "1"
-
-        # --- 核心修改：使用传入的 python_executable ---
-        return subprocess.run(
-            [python_executable, script_path], # 使用指定的解释器
-            env=process_env,
-            capture_output=True,
-            text=True,
-            encoding='utf-8'
-        )

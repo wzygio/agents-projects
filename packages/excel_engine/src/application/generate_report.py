@@ -4,11 +4,10 @@ import sys
 import os
 from pathlib import Path
 
-from excel_generator_project.config import CONFIG, TEMPLATE_PATH, TEMP_PATH
 from packages.excel_engine.src.utils.local_utils import Utils
-from packages.excel_engine.src.core.data_processor import DataProcessor
-from packages.excel_engine.src.core.exception_processor import ExceptionProcessor
-from packages.excel_engine.src.infrastructure.report_writer import ReportGenerator
+from packages.excel_engine.src.infrastructure.processor.data_processor import DataProcessor
+from packages.excel_engine.src.infrastructure.processor.exception_processor import ExceptionProcessor
+from packages.excel_engine.src.infrastructure.processor.report_processor import ReportGenerator
 
 class GenerateReportUseCase:
     def __init__(self, config: dict):

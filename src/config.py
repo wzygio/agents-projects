@@ -1,173 +1,94 @@
 # 文件路径: src/config.py
-import yaml
-import os
-import logging
 from pathlib import Path
-from dotenv import load_dotenv  # [新增] 导入 dotenv 库
+from typing import Dict, Any, Optional
+import yaml
+from pydantic import BaseModel, Field
+from pydantic_settings import BaseSettings, SettingsConfigDict, PydanticBaseSettingsSource
 
-# --- 1. 路径与环境设置 ---
-try:
-    SRC_ROOT = Path(__file__).resolve().parent
-    PROJECT_ROOT = SRC_ROOT.parent
-except NameError:
-    PROJECT_ROOT = Path.cwd()
-    logging.warning(f"无法确定 __file__ 路径，假定项目根目录为: {PROJECT_ROOT}")
+# --- 1. 定义路径 ---
+# 自动定位项目根目录
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
-# [新增] 加载 .env 文件到环境变量中
-# override=True 表示如果 .env 中的变量与系统变量冲突，以 .env 为准
-env_path = PROJECT_ROOT / ".env"
-if env_path.exists():
-    load_dotenv(dotenv_path=env_path, override=True)
-else:
-    logging.warning(f"未找到 .env 文件: {env_path}，将仅使用系统环境变量")
+# --- 2. 定义 YAML 读取器 (这是 Pydantic 支持 YAML 的标准写法) --- 
+class YamlConfigSettingsSource(PydanticBaseSettingsSource):
+    """自定义源：让 Pydantic 能够读取 config/config.yaml"""
+    def get_field_value(self, field: Field, field_name: str) -> tuple[Any, str, bool]: # type: ignore
+        return super().get_field_value(field, field_name)
 
-class ConfigLoader:
-
-    _instance = None
-    def __new__(cls, *args, **kwargs):
-        if cls._instance is None:
-            cls._instance = super(ConfigLoader, cls).__new__(cls)
-        return cls._instance
-
-    def __init__(self, config_file="config.yaml"):
-        if hasattr(self, 'config'):
-            return
-        self.config_path = PROJECT_ROOT / "config" / config_file
-        self._config_data = self._load_config()
-        self._screen_size = None
-
-    def _load_config(self):
-        target_path = self.config_path
-        if not target_path.exists() and Path("config/config.yaml").exists():
-            target_path = Path("config/config.yaml")
-        if not target_path.exists():
-            logging.error(f"配置文件未找到: {target_path}")
+    def __call__(self) -> Dict[str, Any]:
+        # 尝试读取 config.yaml
+        config_file = PROJECT_ROOT / "config" / "anomaly_monitor_config.yaml"
+        if not config_file.exists():
             return {}
-        try:
-            with open(target_path, "r", encoding="utf-8") as f:
-                return yaml.safe_load(f) or {}
-        except Exception as e:
-            raise ValueError(f"YAML解析失败: {e}")
-
-    def get(self, key_path, default=None):
-        keys = key_path.split(".")
-        value = self._config_data
         
-        try:
-            for i, k in enumerate(keys):
-                # --- 调试打印开始 ---
-                # print(f"DEBUG: 正在查找 '{k}' (完整路径: {key_path})，当前上下文类型: {type(value)}")
-                # --- 调试打印结束 ---
+        with open(config_file, encoding="utf-8") as f:
+            return yaml.safe_load(f) or {}
 
-                # 如果当前值是 None，说明路径断了，直接返回 default
-                if value is None:
-                    return default
+# --- 3. 定义数据模型 (The "What") ---
+# 对应 YAML 中的 browser: 节点
+class BrowserConfig(BaseModel):
+    headless: bool = False
+    timeout: int = 30000
+    slow_mo: int = 50
 
-                # 【关键检查】如果当前值不是字典，但我们还要继续往下找...
-                if not isinstance(value, dict):
-                    if i < len(keys): # 如果还有后续 key 要找
-                        error_msg = f"❌ 配置结构冲突! 路径 '{key_path}' 在节点 '{k}' 处中断。期望是 dict，实际是 {type(value)} (值: {value})"
-                        logging.error(error_msg)
-                        print(error_msg) # 强制打印到控制台
-                        return default
+# 对应 YAML 中的 path: 节点
+class PathConfig(BaseModel):
+    data_raw_dir: str = "data/raw"
+    data_input_dir: str = "data/input"
+    log_dir: str = "logs"
+    # 如果 YAML 里没有，这里可以写默认值
 
-                value = value.get(k)
-            
-            return value
-        except AttributeError as e:
-            # 这里的捕获就是为了应对 'int' object has no attribute 'get'
-            logging.error(f"❌ 发生 AttributeError (通常是把数字当字典用了): {e} | 路径: {key_path}")
-            return default
-        except Exception as e:
-            logging.error(f"读取配置异常 [{key_path}]: {e}")
-            return default
+# 对应 YAML 中的 daily_report: 节点
+class DailyReportConfig(BaseModel):
+    portal_url: str = ""
+    inputs: Dict[str, Any] = {} # 复杂结构可以先用 Dict，或者继续定义子 Model
 
-    # =======================================================
-    #  Core Properties (核心属性访问器)
-    # =======================================================
-    @property
-    def path(self):
-        return self._config_data['path']
-
-    @property
-    def data_config(self):
-        return self._config_data['data']
-
-    @property
-    def log_level(self):
-        return self.get("common.log_level", "INFO")
-
-    @property
-    def data_raw_dir(self):
-        return self.get("path.data_raw_dir")
+# --- 4. 主配置类 (整合所有) ---
+class AppConfig(BaseSettings):
+    # 嵌套模型
+    browser: BrowserConfig = BrowserConfig()
+    path: PathConfig = PathConfig()
+    daily_report: DailyReportConfig = DailyReportConfig()
     
-    @property
-    def data_input_dir(self):
-        return self.get("path.data_input_dir")
-
-    @property
-    def headless(self):
-        return self.get("browser.headless", False)
+    # 顶层配置 (直接从环境变量读取)
+    # Field(alias=...) 允许你用不同的名字映射环境变量
+    mes_username: Optional[str] = Field(default=None, alias="MES_USERNAME")
+    mes_password: Optional[str] = Field(default=None, alias="MES_PASSWORD")
     
+    # 全局快捷属性 (Computed Properties)
     @property
-    def timeout(self):
-        return self.get("browser.timeout", 30000)
+    def project_root(self) -> Path:
+        return PROJECT_ROOT
 
-    @property
-    def slow_mo(self):
-        return self.get("browser.slow_mo", 50)
+    # 配置 Pydantic 的行为
+    model_config = SettingsConfigDict(
+        env_file=PROJECT_ROOT / ".env", # 同时也读取 .env
+        env_file_encoding='utf-8',
+        extra='ignore' # 忽略 YAML 里多余的未知字段，不报错
+    )
 
-    @property
-    def portal_url(self):
-        return self.get("daily_report.portal_url")
+    # 注册我们刚才写的 YAML 读取器
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        return (
+            init_settings,
+            env_settings,     # 优先级 1: 环境变量
+            dotenv_settings,  # 优先级 2: .env 文件
+            YamlConfigSettingsSource(settings_cls), # 优先级 3: config.yaml
+        )
 
-    # --- [修改] 账号密码：改为从环境变量读取 ---
-    @property
-    def username(self):
-        """获取登录账号 (优先从环境变量读取)"""
-        # os.getenv 的第二个参数是默认值
-        # 这里逻辑是：先读环境变量，读不到再尝试读 YAML (作为后备)，再没有就返回 None
-        return os.getenv("MES_USERNAME")
-    
-    @property
-    def password(self):
-        """获取登录密码 (优先从环境变量读取)"""
-        return os.getenv("MES_PASSWORD")
-
-    @property
-    def report_names(self):
-        return self.get("daily_report.inputs.report_names", [])
-
-    @property
-    def reports(self):
-        """
-        获取报表配置列表，返回格式为:
-        [{'name': '报表A', 'path': '路径A'}, {'name': '报表B'}]
-        """
-        items = self.get("daily_report.inputs.reports", [])
-        
-        # 兼容旧代码：如果 YAML 里还是写的纯字符串列表，这里自动转成字典，防止报错
-        cleaned_items = []
-        for item in items: # type: ignore
-            if isinstance(item, str):
-                cleaned_items.append({"name": item, "path": None})
-            else:
-                cleaned_items.append(item)
-        return cleaned_items
-    
-    @property
-    def product_models(self):
-        return self.get("daily_report.inputs.product_models", [])
-    
-    @property
-    def screen_size(self):
-        if self._screen_size is None:
-            try:
-                import pyautogui
-                self._screen_size = pyautogui.size()
-            except ImportError:
-                self._screen_size = (1920, 1080)
-        return self._screen_size
-
-# 全局单例
-config = ConfigLoader()
+# --- 5. 实例化 (单例模式) ---
+# 在这里直接实例化，其他文件 import 这个 config 对象即可
+try:
+    config = AppConfig()
+except Exception as e:
+    # 如果配置校验失败（比如必填项缺失），启动时就会直接报错，避免运行时才崩溃
+    print(f"❌ 严重错误: 配置加载失败! {e}")
+    raise

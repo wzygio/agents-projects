@@ -1,0 +1,425 @@
+# 配置文件：config\excel_engine_config.yaml
+
+# 项目路径配置
+paths:
+  base_dir: 'D:/wzy/Python/excel-generator-project'  # 项目根目录（相对路径）
+  resources_dir: 'resources'  # 数据文件夹路径
+  temp_dir: 'data/temp'  # 临时文件夹路径
+  log_dir: 'logs'  # 日志文件夹路径
+  output_dir: 'output'  # 输出文件夹路径
+  template_file: 'V3屏体良率日报-A版.xlsx'  # 模板文件路径
+  temp_file: 'V3屏体良率日报-temp.xlsx'  # 临时文件路径
+  output_file: 'V3屏体良率日报-output.xlsx'  # 输出文件路径
+  downloader_script_path: 'D:/wzy/Python/pyautogui-project/daily_report_files_downloader.py'  # 下载脚本路径
+  downloader_python_executable: 'D:/wzy/Python/pyautogui-project/pyautogui-project/Scripts/python.exe'  # 下载脚本使用的Python解释器路径
+  content_generator_script_path: 'D:/wzy/Python/excel-generator-project/src/excel_generator_project/content_generator.py'  # 内容生成脚本路径
+  style_generator_script_path: 'D:/wzy/Python/excel-generator-project/src/excel_generator_project/style_generator.py'  # 样式生成脚本路径
+
+
+# --- 2. 样式定义 (Style Definitions) ---
+style_definitions:
+  # 第一部分任务所需的样式 (保持不变)
+  part1_title_style:
+    font_name: '微软雅黑'
+    bold: True
+    font_color: '#0000FF'
+  part1_content_style:
+    font_name: '微软雅黑'
+
+  # 第二部分任务所需的样式 (保持不变)
+  part2_title_style:
+    font_name: '微软雅黑'
+    bold: True
+    font_color: '#0000FF'
+  part2_content_style:
+    font_name: '微软雅黑'
+
+  # --- 新增：为二级标题添加样式 ---
+  subtitle_red_bold:
+    font_name: '微软雅黑'
+    bold: True
+    font_color: '#FF0000'
+  subtitle_black_bold:
+    font_name: '微软雅黑'
+    bold: True
+
+  # --- 新增：为三级标题添加样式 ---
+  subtitle_L3_bold:
+    font_name: '微软雅黑'
+    bold: True
+
+model_definitions:  # 任务类型标识符
+  source_file: 'V3屏体良率日报-A版.xlsx'
+  sheet_name: 'sheet1'
+  pattern: '^([^\n]*)'
+  start_cell: 'B2'
+  step: 4
+  end_row: 60
+
+# --- 3. 当日异常任务自动处理 ---
+exception_processing_jobs:
+  # 任务0：从上一版日报提取原异常记录的任务
+  - job_type: "extract_previous_exceptions"
+    sheet_name: 'sheet1'
+    data_column: '日波动调查'
+
+    # 新增的动态路径配置块
+    dynamic_path_config:
+      base_path: '\\10.71.4.18\合肥维信诺公共盘\23专项\大数据专项\02 量产良率\01 屏体良率日报-公司早会'
+      # 子目录的格式化模式，{year}和{month}是占位符
+      subdirectory_pattern: "{year}M{month:02d}" 
+      # 在子目录中查找文件的模式
+      file_pattern: "*.xlsx" 
+    
+    # 用于定义按顺序、按步长提取的规则
+    sequential_extraction_rules:
+      # 每个产品型号对应2个模块
+      modules_per_product: 2
+      # 每个模块的提取规则定义
+      module_definitions:
+        - start_row: 2  # 模块1的起始行
+          step: 4       # 模块1的步长
+          key_name: "previous_module_1" # 存入字典时使用的键名
+          
+        - start_row: 4  # 模块2的起始行
+          step: 4       # 模块2的步长
+          key_name: "previous_module_2" # 存入字典时使用的键名
+
+    # --- 文本转换规则 (正则表达式已更新) ---
+    text_transformations:
+      - rule_name: "move_down_daily_exception"
+        description: "将“当日异常”部分的内容，移动到“各工厂还原时序”下方"
+        # 更新正则表达式，要求待移动的文本块中必须包含 "【异常原因】"
+        source_pattern: '(1、当日异常\s*\n)([\s\S]*?【异常原因】[\s\S]*?)(\s*2、各工厂还原时序)'
+        destination_pattern: '(2、各工厂还原时序\n)'
+      
+      - rule_name: "cleanup_daily_exception_section"
+        description: "删除“当日异常”标题下的所有剩余内容，并保留一个换行符"
+        # 用于查找的正则表达式
+        pattern: '(1、当日异常\s*\n)[\s\S]*?(\s*2、各工厂还原时序)'
+        # 用于替换的字符串
+        replacement: '\1\n\2'
+
+  # 任务1：提取原始数据
+  - job_type: 'extract_daily_exception'
+    source_path: '\\10.71.4.18\合肥维信诺公共盘\23专项\大数据专项\02 量产良率\02 良率异常闭环管理'
+    source_file: 'CT良率异常波动管理表'
+    sheet_name: 'CT异常波动调查'
+    # pandas只能通过读取表头来确定列数
+    date_column: '通报日期'
+    product_model_column: '产品'
+    title_column: '异常通报' 
+    details_column: '工艺整合&工艺 回复的改善及挽救进展' 
+    factory_column: '责任厂别'
+
+    # 新增：用于解析报告标题所需数据的正则表达式
+    title_patterns:
+      exception_name: '【不良名称】([^\n]+)'
+      daily_loss_rate: '当日良损([\d\.]+)' # 注意：这里只捕获数字部分，代码中需要补全百分号
+      monthly_loss_rate: '当月良损([\d\.]+)' # 同上
+    
+    # 新增：用于解析报告详细内容所需数据的正则表达式
+    details_patterns:
+      exception_reason: '【异常原因】([^\n]+)'
+      inline_monitoring: '【Inline监控】([^\n]+)'
+      is_stopped: '【是否止血】([^\n]+)'
+      impact_scope: '【影响范围】([^\n]+)'
+      improvement_measures: '【改善措施】([^【]+)'
+
+  # 任务2：将提取出的原始数据格式化为报告段落
+  - job_type: "format_exception_report"
+    description: "将提取出的结构化异常数据，格式化为最终的报告段落"
+
+  
+  # 任务3：将格式化后的当日异常，插入到异常段落中
+  - job_type: "merge_daily_into_previous"
+    description: "将当日新生成的异常报告，根据厂别，插入到旧有记录模块中"
+
+    # 定义“厂别 -> 目标模块”的路由规则
+    # 键：厂别名称（会与提取出的大写值匹配）
+    # 值：目标模块的键名（对应 previous_exceptions 中的 key_name）
+    factory_routing_rules:
+      ARRAY: "previous_module_1"
+      TP: "previous_module_1"
+      OLED: "previous_module_2"
+      屏体: "previous_module_2"
+
+    # 定义插入点的正则表达式：它会匹配并捕获 "1、当日异常\n" 这部分，以便我们在此后插入内容
+    insertion_pattern: '(1、当日异常\n)'
+
+# --- 3. 数据处理任务批量处理定义 (Batch Processing Jobs) ---
+data_processing_jobs:
+  - job_type: "parse_text_from_cells"   # <-- 1. 使用新的通用 job_type
+    output_key: "daily_yield_change"   # <-- 2. 指定输出的键名
+    description: "更新当日修正良率变化"
+    source_path: "D:/wzy/Python/excel-generator-project/resources"
+    source_file: 'V3屏体良率日报-A版.xlsx'
+    sheet_name: "sheet1"
+    pattern: '1\.当日CT良率说明：\s*(.*?)\s*新增异常：'
+    cell_sequence:
+      start_cell: "D4"
+      step: 4
+      end_row: 60
+  
+  - job_type: "parse_text_from_cells"   # <-- 1. 使用新的通用 job_type
+    output_key: "bp_target"            # <-- 2. 指定输出的键名
+    description: '更新BP良率目标'
+    source_path: 'D:/wzy/Python/excel-generator-project/resources'
+    source_file: 'V3屏体良率日报-A版.xlsx'
+    sheet_name: 'sheet1'
+    pattern: 'BP良率目标\s*([^,]+)'
+    cell_sequence:
+      start_cell: 'D4'
+      step: 4
+      end_row: 60
+  
+  - job_type: 'extract_tila_target'
+    description: '分步提取提拉良率目标（tila_target）'
+    
+    # 第二步配置：根据第一步的每个产品型号，查找其所在的行
+    row_locator:
+      # 在哪个文件和工作表中查找产品型号
+      source_path: '\\10.71.4.18\合肥维信诺公共盘\23专项\大数据专项\02 量产良率\01 屏体良率日报-公司早会'
+      source_file: '25年营收预测0514版提拉目标'
+      sheet_name: '屏体良率预测' # 假设是同一个工作表
+      search_column: 'A' # 在哪一列中搜索产品型号
+    
+    column_locator:
+      # 在哪个文件和工作表中查找月份（通常与第二步一致）
+      source_path: '\\10.71.4.18\合肥维信诺公共盘\23专项\大数据专项\02 量产良率\01 屏体良率日报-公司早会'
+      source_file: '25年营收预测0514版提拉目标'
+      search_row: 3 # 在哪一行中搜索月份
+      month_format: '{month}月' # 月份的格式。代码运行时会自动将 {month} 替换为当前的月份数字
+
+  - job_type: 'extract_monthly_yield_estimate'
+    description: '从动态路径的最新周报中，提取月度良率预估相关数据'
+
+    # 第二步：动态定位需要读取的文件
+    file_locator:
+      base_path: '\\10.71.4.18\合肥维信诺公共盘\23专项\大数据专项\04 良率预估\2025年'
+      directory_rule:
+        prefix: 'W'
+      name_contains: '良率预测'
+  
+    # 单元格定位与数据提取配置
+    cell_locator:
+      sheet_name: 'PMC数据辅助&月良率预估'
+      header_row: 1 # 所有表头都在第1行
+
+      row_locator:
+          header_name: 'Item'
+          occurrence: 2
+
+      column_locator:
+        # 定义“排产良率”所在的列
+        production_yield_col:
+          header_name: '排产良率'
+
+        # 定义“当月预估”所在的列：它的表头是动态的
+        # M{month:02} 会被程序格式化为 M09, M10, M11 等
+        monthly_yield_col:
+          header_format: 'M{month:02}'
+
+  - job_type: "parse_text_from_cells"   # <-- 1. 使用新的通用 job_type
+    output_key: "best_batch"            # <-- 2. 指定输出的键名
+    description: '提取最优批次'
+    source_path: 'D:/wzy/Python/excel-generator-project/resources'
+    source_file: 'V3屏体良率日报-A版.xlsx'
+    sheet_name: 'sheet1'
+    pattern: '最优批次：\s*([^\n]+)'
+    cell_sequence:
+      start_cell: 'D4'
+      step: 4
+      end_row: 60
+  
+  - job_type: "parse_text_from_cells"   # <-- 1. 使用新的通用 job_type
+    output_key: "latest_batch"            # <-- 2. 指定输出的键名
+    description: '提取最新批次'
+    source_path: 'D:/wzy/Python/excel-generator-project/resources'
+    source_file: 'V3屏体良率日报-A版.xlsx'
+    sheet_name: 'sheet1'
+    pattern: '最新批次：\s*([^\n]+)'
+    cell_sequence:
+      start_cell: 'D4'
+      step: 4
+      end_row: 60
+  
+  # --- 使用以下配置替换现有的 "extract_risk_items" 任务 ---
+  - job_type: 'extract_risk_items'
+    description: '从日报模板的文本块中提取风险品，并查找其释放计划'
+
+    # --- 第一部分：用于从日报模板中定位“风险品”文本块 ---
+    template_reader_config:
+      # (这部分配置与 parse_text_from_cells 任务共享相同的源文件)
+      source_path: 'D:/wzy/Python/excel-generator-project/resources'
+      source_file: 'V3屏体良率日报-A版.xlsx'
+      sheet_name: 'sheet1'
+      cell_sequence:
+        start_cell: 'D4'
+        step: 4
+        end_row: 60
+      block_pattern: '(?s)3\.2风险品：\s*(.*?)\s*4\.良率提升机会点'
+
+    # --- 第二部分：用于从文本块中解析出具体的“风险品名称” ---
+    parser_config:
+      # 新正则的逻辑: (捕获组1: 风险品名称) + (捕获组2: 该行剩余的所有良率文本)
+      # ([\s\S]+?) : 非贪婪匹配所有字符，直到...
+      # (?=\s*M\d): ...遇到一个（可选的）空格，后面跟着"M"和一个数字
+      item_pattern: '①\s*([\s\S]+?)\s*(M\d[^\n]*)'
+      item_pattern_2: '②\s*([\s\S]+?)\s*(M\d[^\n]*)'
+      item_pattern_3: '③\s*([\s\S]+?)\s*(M\d[^\n]*)'
+      item_pattern_4: '④\s*([\s\S]+?)\s*(M\d[^\n]*)'
+    # --- 修改结束 ---
+
+    plan_finder_config:
+      # 步骤1：从旧日报中获取“基线”计划
+      old_release_plan_finder:
+        # 1.1) 查找文件
+        dynamic_path_config:
+          base_path: '\\10.71.4.18\合肥维信诺公共盘\23专项\大数据专项\02 量产良率\01 屏体良率日报-公司早会'
+          subdirectory_pattern: "{year}M{month:02d}"
+          file_pattern: "*.xlsx"
+        
+        # 1.2) 查找逻辑
+        sheet_name: 'sheet1'
+        product_model_column: 'B'  # 产品型号在哪一列
+        model_start_row: 2         # 型号从第几行开始
+        model_step: 4              # 型号的步长
+        risk_content_column: 'D'   # 风险品内容在哪一列
+        risk_content_offset: 2     # 风险品内容行 = 型号行 + 2
+        
+        # 1.3) 解析逻辑
+        block_pattern: '(?s)3\.2风险品：\s*(.*?)\s*4\.良率提升机会点'
+        parser_pattern: '(?:①|②|③|④|⑤)\s*([\s\S]+?)\s*M\d+[\s\S]*?%?：([\s\S]*?)(?=\n[①②③④⑤]|\nOLED:|\nTP:|$)'
+      
+      # (新增) 步骤2：从风险品汇总表获取“更新”计划
+      # (这部分就是你之前的 'release_plan_finder')
+      new_release_plan_finder:
+        source_path: '\\10.71.4.18\合肥维信诺公共盘\23专项\大数据专项'
+        source_file: '风险品汇总'
+        sheet_name: '风险品释放管控表'
+        header_row: 1
+        product_model_column: '产品'
+        risk_item_column: '风险'
+        release_plan_column: '释放计划'
+  
+  - job_type: 'prepare_summary_data'
+    description: '整合所有已提取的数据，为每个产品型号生成并写入最终的摘要文本'
+    template_name: 'yield_summary'  # 要使用的模板名称，对应 report_text_templates 中的键
+
+
+
+report_generator_jobs:
+  - job_type: "write_processed_exceptions"
+    description: "将最终处理好的异常模块文本，按顺序写回到目标Excel文件的单元格中"
+    data_source_key: "exceptions_data" # 我们将在主流程中用这个键名注入数据
+    sheet_name: 'sheet1'
+    data_column: '日波动调查'
+    
+    # 代码会根据这个规则计算出每个模块应该写入的行号
+    sequential_extraction_rules:
+      modules_per_product: 2
+      module_definitions:
+        - start_row: 2
+          step: 4
+          key_name: "previous_module_1"
+          
+        - start_row: 4
+          step: 4
+          key_name: "previous_module_2"
+
+  - job_type: "write_summary_reports"
+    description: "将DataProcessor准备好的摘要数据，填充模板并写入Excel"
+    data_source_key: "yield_data" # 用于从DataProcessor的结果中查找数据
+    template_name: "yield_summary"  # 使用的模板名称
+    target_cells:
+      start_cell: "D4"            # 报告写入的起始单元格
+      step: 4                     # 写入的步长
+ 
+# --- 4. 字体样式任务批量处理定义 (Batch Processing Jobs) ---
+font_processing_jobs:
+
+  # 任务一：处理 D 列的良率数据
+  - job_name: 'Process Part 1 Yield Data'
+    sheet_name: 'sheet1'
+    cell_sequence:
+      start_cell: 'D4'
+      step: 4
+      end_row: 60
+    # 此任务使用的标题识别规则
+    title_definitions:
+      - name: 'b4_all_titles'
+        # 这是一个“终极”正则表达式，能匹配B列所有格式的标题，它通过 | (或) 将多种模式组合在了一起
+        # pattern: '(?:^|\n)\s*\d+\.(?!\d)[^\n]*'
+        pattern: '^\s*\d+\.(?!\d)\s*[^\n]*?(?:[:：]|$)'
+        style: 'part1_title_style'
+
+  # 任务二：处理 G 列的异常分析数据 (应用新的嵌套结构)
+  - job_name: 'Process Part 2 Anomaly Data'
+    sheet_name: 'sheet1'
+    cell_sequence:
+      start_cell: 'G2'
+      step: 2
+      end_row: 60
+    title_definitions:
+    # 一级标题定义
+      - name: 'u_column_L1_title'
+        pattern: '\d+、(?:当日异常|各工厂还原时序|月度/批次分析)'
+        style: 'part2_title_style'
+        # 新增：定义其下的子标题(二级标题)规则
+        sub_definitions: # 二级标题
+        - name: 'u_column_L2_title'
+          # 精准匹配后面跟着 \n【 的二级标题
+          pattern: '\n(\d\.\d[^\n]+)(?=\n【)|【异常】([^\n]+?)\s*([\d.]+%)\s*[（(]([^）)]+)[）)]'
+          default_style: 'subtitle_black_bold'
+          conditional_styles:
+            - if_parent_contains: '当日异常'
+              style: 'subtitle_red_bold'
+          # 在二级标题下，再定义三级标题
+          sub_definitions: # 三级标题
+            - name: 'u_column_L3_title'
+              pattern: '(【[^】]+】)'
+              style: 'subtitle_L3_bold'
+          
+# 日报生成相关配置
+report:
+  report_date: ''  # 数据日期（由用户输入）
+  sections_to_generate: []  # 要生成的章节（由用户选择）
+
+# 4. 报告文本模板
+# 使用 | 可以在YAML中定义多行字符串，非常适合存放模板
+report_text_templates:
+  yield_summary: |
+    1.当日CT良率说明：{daily_yield_change}
+    新增异常：{new_exceptions}
+    已知异常：{known_exceptions}
+    2. 月度良率预估
+    目标及预估：BP良率目标{bp_target}，提拉良率目标 {tila_target}，排产良率目标{prod_target}，预估{estimated_yield}（与提拉目标Gap：{estimated_tila_gap}）
+    最优批次：{best_batch}
+    最新批次：{latest_batch}
+    3. 持续良损问题
+    3.1 特有异常：{unique_exceptions}
+    3.2 风险品：
+    {risk_items}
+    4.良率提升机会点
+    4.1 Array：{array_opportunities}
+    4.2 OLED：{oled_opportunities}
+    4.3 TP：{tp_opportunities}
+  exception_report_title: |
+    {index} {exception_name} {daily_loss_rate}({month_str} {monthly_loss_rate})
+  exception_report_details: |
+    【异常原因】{exception_reason}
+    【Inline监控】{inline_monitoring}
+    【是否止血】{is_stopped}
+    【影响范围】{impact_scope}
+    【改善措施】{improvement_measures}
+  # --- 新增：用于异常记录缺失时的默认文本 ---
+  default_empty_exception_module: |
+    1、当日异常
+    无
+
+    2、各工厂还原时序
+    无
+
+    3、月度/批次分析
+    无

@@ -4,10 +4,8 @@ import sys
 import os
 from pathlib import Path
 
-from excel_generator_project.config import CONFIG, TEMP_PATH, OUTPUT_PATH
-from excel_generator_project.config import CONFIG
 from packages.excel_engine.src.utils.local_utils import Utils
-from packages.excel_engine.src.core.font_processor import FontProcessor
+from packages.excel_engine.src.infrastructure.processor.font_processor import FontProcessor
 
 class RefineStylesUseCase:
     def __init__(self, config: dict):
