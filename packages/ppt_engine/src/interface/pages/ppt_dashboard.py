@@ -1,15 +1,14 @@
 # 文件路径：packages\ppt_engine\src\interface\app.py
-import yaml, os, sys, logging
+import yaml, os, sys
 import datetime
 from datetime import timedelta
 import subprocess
 import tempfile
-import shutil
-from pathlib import Path
 import streamlit as st
 
-from packages.ppt_engine.src.config import CONFIG, RESOURCES_DIR, MAIN_PY_PATH,  OUTPUT_DIR
+from packages.ppt_engine.src.config import CONFIG, RESOURCES_DIR, MAIN_PY_PATH, OUTPUT_DIR
 from packages.ppt_engine.src.interface.components.app_setup import AppSetup
+
 @st.cache_resource
 def init_portal_resources():
     AppSetup.initialize_app()
