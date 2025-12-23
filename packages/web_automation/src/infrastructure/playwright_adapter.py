@@ -1,17 +1,22 @@
-# 文件路径: src/daily_report/infrastructure/web/oled_portal.py
-import logging, time
-from playwright.sync_api import Page, Frame
-from src.config import config
+# 文件路径: packages/web_automation/src/infrastructure/oled_portal.py
+import logging
+import time
 from datetime import datetime
+from playwright.sync_api import Page, Frame
 
 
-class OLEDPortalPage:
-    # 移除 driver 参数，纯 Playwright 不需要 driver
-    def __init__(self, page: Page):
+class OLEDPortalAdapter:
+    """
+    [Page Object Adapter]
+    封装具体针对 OLED Portal 网站的页面操作逻辑。
+    不包含业务流程，只包含操作原子。
+    """
+
+    def __init__(self, page: Page, timeout: int = 30000):
         self.page = page
-        self.default_timeout = float(config.timeout) if isinstance(config.timeout, (int, float, str)) and str(config.timeout).replace('.', '').isdigit() else 30000
+        self.default_timeout = timeout
         
-        # --- 1. 主页/登录页元素 (这些通常在主 Frame) ---
+        # --- 1. 主页/登录页元素 ---
         self.SELECTOR_LOGIN_USER = "input[placeholder='用户名']"
         self.SELECTOR_LOGIN_PWD = "input[placeholder='密码']"
         self.SELECTOR_LOGIN_BTN = "div.login-button"
@@ -20,7 +25,7 @@ class OLEDPortalPage:
         self.SELECTOR_CANCEL_BTN = "div.bi-icon-change-button" 
         self.SELECTOR_CLEAR_SEARCH_BTN = "div.close-font"
 
-        # --- 2. 报表内部元素 (这些在 Iframe 里) ---
+        # --- 2. 报表内部元素 ---
         self.SELECTOR_PRODUCT_WRAPPER = "div[widgetname='CMCBPRODCODE']"
         self.SELECTOR_PRODUCT_INPUT = f"{self.SELECTOR_PRODUCT_WRAPPER} input.fr-trigger-texteditor"
 
@@ -37,7 +42,6 @@ class OLEDPortalPage:
                 self.page.fill(self.SELECTOR_LOGIN_USER, username)
                 self.page.fill(self.SELECTOR_LOGIN_PWD, password)
                 self.page.click(self.SELECTOR_LOGIN_BTN)
-                logging.info("已点击登录，等待跳转...")
                 
                 self.page.wait_for_selector(
                     self.SELECTOR_SEARCH_ICON, 
@@ -51,14 +55,9 @@ class OLEDPortalPage:
             logging.error(f"登录失败: {e}")
             raise e
 
-    def search_and_enter_report(self, report_config: dict):
+    def search_and_enter_report(self, report_name: str, report_path: str):
         """搜索并点击报表"""
-        report_name = report_config.get("name")
-        if not report_name:
-            raise ValueError("报表配置不完整，缺少 'name'")
-        
-        report_path = report_config.get("path")
-        logging.info(f"准备搜索报表: {report_name} (路径: {report_path or '任意'})")
+        logging.info(f"准备搜索报表: {report_name}")
 
         # 1. 搜索动作
         self.page.click(self.SELECTOR_SEARCH_ICON)
@@ -66,7 +65,6 @@ class OLEDPortalPage:
         self.page.fill(self.SELECTOR_SEARCH_INPUT, "")
         self.page.type(self.SELECTOR_SEARCH_INPUT, report_name, delay=100)
         
-        logging.info("正在匹配搜索结果...")
         self.page.wait_for_timeout(1000)
 
         # 2. 定位逻辑
@@ -76,10 +74,9 @@ class OLEDPortalPage:
                     .filter(has_text=report_name) \
                     .filter(has_text=report_path) \
                     .last
-                
-                target_report.get_by_text(report_name).click(timeout=1000)
+                target_report.get_by_text(report_name).click(timeout=3000)
             else:
-                self.page.get_by_text(report_name).first.click(timeout=1000)
+                self.page.get_by_text(report_name).first.click(timeout=3000)
 
             logging.info(f"已点击报表: {report_name}")
             
@@ -91,24 +88,16 @@ class OLEDPortalPage:
 
     def get_report_frame(self) -> Frame:
         """获取当前激活的报表 Iframe"""
-        logging.info("正在定位当前活动的报表 Frame...")
+        # (代码逻辑保持原样，省略部分重复注释)
         for frame in self.page.frames:
-            if frame == self.page.main_frame:
-                continue
-            
+            if frame == self.page.main_frame: continue
             try:
-                frame_element = frame.frame_element()
-                if not frame_element.is_visible():
-                    continue
-
-                if frame.locator(self.SELECTOR_PRODUCT_WRAPPER).count() > 0:
-                    return frame
-            except Exception:
-                continue
+                if frame.frame_element().is_visible():
+                    if frame.locator(self.SELECTOR_PRODUCT_WRAPPER).count() > 0:
+                        return frame
+            except Exception: continue
         
-        error_msg = "未找到包含目标控件的可见 Iframe。"
-        logging.error(error_msg)
-        raise Exception(error_msg)
+        raise Exception("未找到包含目标控件的可见 Iframe。")
 
     def set_date_to_today_if_morning(self):
         """

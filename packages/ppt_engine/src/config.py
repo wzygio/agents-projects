@@ -41,12 +41,12 @@ class LayoutCalculator:
         return sizes, secondary_item_size
 
 # =============================================================================
-# 2. 基础配置模型 (Base Models) - 增强兼容版
+# 2. 基础配置模型 (Base Models) - 终极兼容版
 # =============================================================================
 
 class BaseConfig(BaseModel):
     """
-    基础配置类 (增强版)。
+    基础配置类 (终极兼容版)。
     既支持 Pydantic 的强类型校验，
     又通过魔术方法完美模拟了 Python 字典的行为，以兼容旧代码。
     """
@@ -56,32 +56,54 @@ class BaseConfig(BaseModel):
         # 允许通过字段名或别名填充
         populate_by_name = True
 
-    # --- 1. 解决 config['key'] 读取 ---
-    def __getitem__(self, item):
-        return getattr(self, item)
+    # --- 1. 字典核心迭代方法 (解决 .keys() 报错) ---
+    def keys(self):
+        """模拟字典的 .keys()，返回所有字段名"""
+        return self.model_dump(by_alias=True).keys()
 
-    # --- 2. 解决 config['key'] = value 赋值 ---
+    def values(self):
+        """模拟字典的 .values()，返回所有字段值"""
+        # 注意：这里我们返回 getattr 的结果，保持对象引用，而不是 dump 后的纯数据
+        return [getattr(self, k) for k in self.keys()]
+
+    def items(self):
+        """模拟字典的 .items()，返回 (key, value) 元组"""
+        return [(k, getattr(self, k)) for k in self.keys()]
+
+    # --- 2. 安全的 get 方法 ---
+    def get(self, key, default=None):
+        """
+        模拟字典的 .get()。
+        增强逻辑：如果属性存在但值为 None，且 default 不为 None，则返回 default。
+        """
+        value = getattr(self, key, None)
+        if value is None and default is not None:
+            return default
+        return value if value is not None else default
+
+    # --- 3. 基础字典访问 ---
+    def __getitem__(self, item):
+        val = getattr(self, item, None)
+        if val is None and item not in self.keys():
+             # 为了兼容旧代码，这里抛出 KeyError 是标准行为
+             # 但如果您的代码习惯依赖 None 返回，可以改为 return None
+             # 鉴于 extra='allow'，未定义字段应该能通过 setattr 添加进来
+             raise KeyError(f"'{item}' not found in configuration")
+        return val
+
     def __setitem__(self, key, value):
         setattr(self, key, value)
 
-    # --- 3. 解决 'key' in config 判断 ---
     def __contains__(self, key):
-        return hasattr(self, key)
+        return hasattr(self, key) or key in self.keys()
 
-    # --- 4. 解决 config.get('key', default) ---
-    def get(self, key, default=None):
-        return getattr(self, key, default)
-
-    # --- 5. 解决 config.update({...}) ---
+    # --- 4. 解决 config.update({...}) ---
     def update(self, other_dict: Dict[str, Any]):
         for k, v in other_dict.items():
             setattr(self, k, v)
 
-    # --- 6. 兜底方案：访问不存在的属性不报错 ---
-    # 注意：这个方法要放在最后，且只有当找不到属性时才会触发
-    # 它导致了之前的 "None cannot be called" 错误，所以我们需要小心处理
+    # --- 5. 兜底方案 ---
     def __getattr__(self, item):
-        # 如果代码试图访问 __getstate__ 等内部方法，不要拦截
         if item.startswith('__'):
             return super().__getattribute__(item)
         return None
@@ -131,7 +153,7 @@ class PathsConfig(BaseConfig):
     daily_report_template: DailyReportTemplateConfig
     data_sources: List[DataSourceItem]
     
-    # [新增] 兼容旧代码的 base_dir 字段，由 validator 自动填充
+    # [新增] 兼容旧代码的 base_dir 字段
     base_dir: Optional[str] = None
 
 # --- Layout Components ---
@@ -207,8 +229,6 @@ class LayoutCalculations(BaseConfig):
 class TableLayoutConfig(BaseConfig):
     """
     专门对应 YAML 中 table_layout 下的结构
-    base: ...
-    calculations: ...
     """
     base: TableBaseLayout
     calculations: Optional[LayoutCalculations] = None
@@ -219,7 +239,6 @@ class SectionConfig(BaseConfig):
     data_config: Optional[YieldDataConfig] = None
     layout_config: Optional[Dict[str, ElementLayout]] = None
     
-    # [修改] 这里不再用 Dict，而是用明确定义的 TableLayoutConfig 类
     table_layout: Optional[TableLayoutConfig] = None
 
     # Anomaly Management Specifics
@@ -233,26 +252,18 @@ class SectionConfig(BaseConfig):
         """
         [核心逻辑] 自动执行表格布局计算
         """
-        # 1. 检查是否存在 table_layout 和 calculations
-        # 注意：现在使用点号访问属性，而不是 get()，且类型非常明确
         if not self.table_layout or not self.table_layout.calculations:
             return self
         
-        # 2. 获取对象引用
-        # Pylance 现在非常清楚 base 就是 TableBaseLayout，row_heights 就是 List[float]
         base_layout = self.table_layout.base
         calculations = self.table_layout.calculations
         
-        # 3. 计算行高
         if calculations.row_heights:
             row_heights, _ = LayoutCalculator.calculate_sizes(**calculations.row_heights.model_dump())
-            # 赋值不再报错，因为 base_layout.row_heights 明确接受 List[float]
             base_layout.row_heights = row_heights
 
-        # 4. 计算列宽
         if calculations.col_widths:
             cw_calc = calculations.col_widths
-            # 先算窄列宽度
             _, narrow_width = LayoutCalculator.calculate_sizes(**cw_calc.narrow_col_params.model_dump())
             
             final_col_widths = []
@@ -277,7 +288,6 @@ class AppSettings(BaseConfig):
 class SectionMap(BaseConfig):
     yield_data: SectionConfig
     anomaly_management: SectionConfig
-    # 允许额外章节
     model_config = {"extra": "allow"}
 
 class PptEngineConfig(BaseConfig):
@@ -285,66 +295,81 @@ class PptEngineConfig(BaseConfig):
     settings: AppSettings
     sections: SectionMap
     
-    # 运行时动态设置
     runtime_settings: Optional[Dict[str, Any]] = {}
 
+    @classmethod
+    def from_app_config(cls, app_config_dict: Dict[str, Any]) -> 'PptEngineConfig':
+        """
+        工厂方法：从全局 AppConfig 字典中提取 'ppt_engine' 部分
+        """
+        ppt_data = app_config_dict.get('ppt_engine', {})
+        
+        # 兼容性处理：如果全局配置中有一些通用路径想注入，可以在这里做
+        # 但我们假设 ppt_engine.yaml 已经包含了所有必要信息
+        
+        return cls(**ppt_data)
+
 # =============================================================================
-# 5. 加载与初始化逻辑 (Initialization)
+# 5. 加载逻辑 (单例与兼容)
 # =============================================================================
 
 # 确定项目根目录
 try:
-    # 假设当前文件在 packages/ppt_engine/src/config.py
-    # 向上回溯 3 层到 project_root
     PROJECT_ROOT = Path(__file__).resolve().parents[4]
 except NameError:
     PROJECT_ROOT = Path.cwd()
 
+# 全局单例
+CONFIG: Optional[PptEngineConfig] = None
+
+# 旧的加载逻辑保留用于独立测试
 CONFIG_YAML_PATH = PROJECT_ROOT / "config" / "ppt_engine_config.yaml"
 
-_config_instance: Optional[PptEngineConfig] = None
-
-def load_config(yaml_path: Path = CONFIG_YAML_PATH) -> PptEngineConfig:
-    """加载并返回强类型配置对象"""
-    global _config_instance
-    if _config_instance:
-        return _config_instance
+def load_config(yaml_path: Path = CONFIG_YAML_PATH) -> PptEngineConfig | None:
+    global CONFIG
+    if CONFIG: return CONFIG
 
     if not yaml_path.exists():
-        # Fallback 尝试
+        # 尝试查找相对路径
         alt_path = Path("config/ppt_engine_config.yaml")
         if alt_path.exists():
             yaml_path = alt_path
         else:
-            raise FileNotFoundError(f"配置文件未找到: {yaml_path}")
+             # 在统一配置模式下，可能不需要这个文件存在，而是从内存加载
+             # 但为了兼容旧的独立运行脚本，我们还是报个警
+            logging.warning(f"Standalone PPT config not found: {yaml_path}")
+            return None
 
     with open(yaml_path, 'r', encoding='utf-8') as f:
         raw_data = yaml.safe_load(f)
 
-    # 注入 base_dir (兼容旧逻辑)
     if 'paths' in raw_data:
         raw_data['paths']['base_dir'] = str(PROJECT_ROOT)
 
     try:
-        _config_instance = PptEngineConfig(**raw_data)
-        logging.info(f"配置加载成功: {yaml_path}")
-        return _config_instance
+        CONFIG = PptEngineConfig(**raw_data)
+        logging.info(f"PPT Config loaded from file: {yaml_path}")
+        return CONFIG
     except Exception as e:
-        logging.error(f"配置校验失败: {e}")
+        logging.error(f"PPT Config validation failed: {e}")
         raise
 
-# =============================================================================
-# 6. 导出全局对象与常量 (Exports)
-# =============================================================================
+# 尝试预加载 (如果文件存在)
+if CONFIG_YAML_PATH.exists() or Path("config/ppt_engine_config.yaml").exists():
+    try:
+        load_config()
+    except Exception:
+        pass # 忽略错误，等待主程序通过 from_app_config 初始化
 
-# 预加载配置 (注意：这会立即执行加载，如果不需要立即加载可注释掉)
-CONFIG = load_config()
+# 导出常量 (使用 Lazy Proxy 思想，防止 Import 时报错)
+# 注意：只有当 CONFIG 被正确初始化后，这些常量才有效
+LOG_DIR = getattr(CONFIG.paths, 'log_dir', 'logs') if CONFIG else 'logs'
+RESOURCES_DIR = getattr(CONFIG.paths, 'resources_dir', 'resources') if CONFIG else 'resources'
+DATA_RAW_DIR = getattr(CONFIG.paths, 'data_raw_dir', 'data/raw') if CONFIG else 'data/raw'
+OUTPUT_DIR = getattr(CONFIG.paths, 'output_dir', 'output') if CONFIG else 'output'
+MAIN_PY_PATH = getattr(CONFIG.paths, 'main_py_path', 'main.py') if CONFIG else 'main.py'
 
-# 兼容旧代码的常量导出
-# 注意：CONFIG 现在的表现像个对象，但为了兼容 config['paths'] 写法，
-# 建议在 BaseConfig 中保留 __getitem__ 或者直接迁移旧代码使用属性访问
-LOG_DIR = PROJECT_ROOT / CONFIG.paths.log_dir
-RESOURCES_DIR = PROJECT_ROOT / CONFIG.paths.resources_dir
-DATA_RAW_DIR = PROJECT_ROOT / CONFIG.paths.data_raw_dir
-OUTPUT_DIR = PROJECT_ROOT / CONFIG.paths.output_dir
-MAIN_PY_PATH = PROJECT_ROOT / CONFIG.paths.main_py_path
+def load_and_process_config(path=None):
+    if path:
+        return load_config(Path(path))
+    return CONFIG

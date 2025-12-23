@@ -1,0 +1,28 @@
+# =============================================================================
+# [Part 1] 全局基础设施 (Global Infrastructure)
+# =============================================================================
+common:
+  project_name: "DutyAutomationSystem"
+  env: "production"
+  log_level: "INFO"
+  headless_mode: true  # 全局默认
+
+path:
+  base_dir: "."
+  # 定义公共目录，供子模块复用
+  input: "data/input"
+  output: "output"
+  logs: "logs"
+  resources: "resources"
+  cache: "data/cache"
+
+# =============================================================================
+# [Part 2] 模块组装 (Module Assembly)
+# 核心：这里不写具体参数，而是通过 "includes" 指向子文件
+# 加载器会自动读取这些文件，并将内容挂载到对应的 key 下
+# =============================================================================
+includes:
+  # Key (代码中引用的变量名) : Value (子文件路径)
+  web_automation: "config/web_automation.yaml"
+  ppt_engine: "config/ppt_engine.yaml"
+  excel_engine: "config/excel_engine.yaml"

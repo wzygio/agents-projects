@@ -1,32 +1,67 @@
 import os
-import yaml
+import logging
 from typing import List, Dict, Optional, Any, Union
-from pydantic import BaseModel, Field
 from pathlib import Path
+from pydantic import BaseModel, Field, model_validator
 
 # =============================================================================
-# 1. 基础配置类 (核心兜底机制)
+# 1. 基础配置类 (终极兼容版)
 # =============================================================================
 class BaseConfig(BaseModel):
     """
     基础配置类。
-    实现 __getattr__ 以允许访问未显式定义的字段，
-    避免因为 YAML 中临时新增字段而导致代码报错（方案一的核心）。
+    完美模拟字典的所有行为：keys(), values(), items(), get(), [], in
+    同时支持 Pydantic 的强类型校验。
     """
-    def __getattr__(self, item) -> Any:
-        return None
-    
-    # [新增] 允许通过 config['field'] 访问，实现对旧代码的兼容
-    def __getitem__(self, item):
-        # 尝试获取属性
-        value = getattr(self, item)
-        # 如果是 Pydantic 模型，可能需要转换，但在内存中我们希望保持对象状态
-        # 所以直接返回 getattr 的结果即可
-        return value
+    class Config:
+        extra = 'allow' # 允许额外字段
+        populate_by_name = True
 
-    # [新增] 允许 'key' in config 的判断
-    def __contains__(self, item):
-        return hasattr(self, item)
+    # --- 1. 字典核心迭代方法 (解决 .keys() 报错) ---
+    def keys(self):
+        """模拟字典的 .keys()，返回所有字段名"""
+        return self.model_dump(by_alias=True).keys()
+
+    def values(self):
+        """模拟字典的 .values()，返回所有字段值"""
+        return [getattr(self, k) for k in self.keys()]
+
+    def items(self):
+        """模拟字典的 .items()，返回 (key, value) 元组"""
+        return [(k, getattr(self, k)) for k in self.keys()]
+
+    # --- 2. 安全的 get 方法 ---
+    def get(self, key, default=None):
+        """
+        模拟字典的 .get()。
+        增强逻辑：如果属性存在但值为 None，且 default 不为 None，则返回 default。
+        """
+        value = getattr(self, key, None)
+        if value is None and default is not None:
+            return default
+        return value if value is not None else default
+
+    # --- 3. 基础字典访问 ---
+    def __getitem__(self, item):
+        val = getattr(self, item, None)
+        if val is None and item not in self.keys():
+             # 为了兼容某些宽松的旧代码，这里可以选择返回 None 还是报错
+             # 标准字典行为是报错，但您的方案一似乎倾向于返回 None
+             # 这里我们采用标准字典行为，因为 extra='allow' 已经允许动态存取了
+             raise KeyError(f"'{item}' not found in configuration")
+        return val
+
+    def __setitem__(self, key, value):
+        setattr(self, key, value)
+
+    def __contains__(self, key):
+        return hasattr(self, key) or key in self.keys()
+
+    # --- 4. 兜底方案 ---
+    def __getattr__(self, item):
+        if item.startswith('__'):
+            return super().__getattribute__(item)
+        return None
 
 # =============================================================================
 # 2. 通用子组件配置 (复用于多个模块)
@@ -35,7 +70,7 @@ class BaseConfig(BaseModel):
 class DynamicPathConfig(BaseConfig):
     """动态路径查找配置"""
     base_path: Optional[str] = None
-    subdirectory_pattern: Optional[str] = None # e.g., "{year}M{month:02d}"
+    subdirectory_pattern: Optional[str] = None
     file_pattern: Optional[str] = None
 
 class CellSequence(BaseConfig):
@@ -82,7 +117,7 @@ class StyleProperties(BaseConfig):
     font_color: Optional[str] = None
 
 class StyleDefinitionsConfig(BaseConfig):
-    """样式定义集合，为了获得更好的补全，我们显式列出已知样式"""
+    """样式定义集合"""
     part1_title_style: Optional[StyleProperties] = None
     part1_content_style: Optional[StyleProperties] = None
     part2_title_style: Optional[StyleProperties] = None
@@ -91,7 +126,6 @@ class StyleDefinitionsConfig(BaseConfig):
     subtitle_black_bold: Optional[StyleProperties] = None
     subtitle_L3_bold: Optional[StyleProperties] = None
     
-    # 允许额外的自定义样式
     model_config = {"extra": "allow"}
 
 # --- Model Definitions ---
@@ -125,10 +159,6 @@ class DetailsPatterns(BaseConfig):
     improvement_measures: str
 
 class ExceptionJobConfig(BaseConfig):
-    """
-    异常处理任务配置。
-    包含所有可能的字段，根据 job_type 使用不同的字段。
-    """
     job_type: str
     description: Optional[str] = None
     sheet_name: Optional[str] = None
@@ -154,7 +184,7 @@ class ExceptionJobConfig(BaseConfig):
     factory_routing_rules: Optional[Dict[str, str]] = None
     insertion_pattern: Optional[str] = None
 
-# --- Data Processing Jobs (非常复杂的部分) ---
+# --- Data Processing Jobs ---
 
 class RowLocator(BaseConfig):
     source_path: Optional[str] = None
@@ -169,7 +199,6 @@ class ColumnLocator(BaseConfig):
     source_file: Optional[str] = None
     search_row: Optional[int] = None
     month_format: Optional[str] = None
-    # 针对 extract_monthly_yield_estimate
     production_yield_col: Optional[Dict[str, str]] = None
     monthly_yield_col: Optional[Dict[str, str]] = None
 
@@ -198,7 +227,6 @@ class ParserConfig(BaseConfig):
     item_pattern_4: Optional[str] = None
 
 class PlanFinderSubConfig(BaseConfig):
-    # 复用 DynamicPathConfig 或直接定义字段
     dynamic_path_config: Optional[DynamicPathConfig] = None
     source_path: Optional[str] = None
     source_file: Optional[str] = None
@@ -219,34 +247,26 @@ class PlanFinderConfig(BaseConfig):
     new_release_plan_finder: Optional[PlanFinderSubConfig] = None
 
 class DataJobConfig(BaseConfig):
-    """
-    数据处理任务配置 (Fat Model)。
-    """
     job_type: str
     description: Optional[str] = None
     output_key: Optional[str] = None
     
-    # parse_text_from_cells 相关
     source_path: Optional[str] = None
     source_file: Optional[str] = None
     sheet_name: Optional[str] = None
     pattern: Optional[str] = None
     cell_sequence: Optional[CellSequence] = None
     
-    # extract_tila_target 相关
     row_locator: Optional[RowLocator] = None
     column_locator: Optional[ColumnLocator] = None
     
-    # extract_monthly_yield_estimate 相关
     file_locator: Optional[FileLocator] = None
     cell_locator: Optional[CellLocator] = None
     
-    # extract_risk_items 相关
     template_reader_config: Optional[TemplateReaderConfig] = None
     parser_config: Optional[ParserConfig] = None
     plan_finder_config: Optional[PlanFinderConfig] = None
     
-    # prepare_summary_data 相关
     template_name: Optional[str] = None
 
 # --- Report Generator Jobs ---
@@ -260,7 +280,7 @@ class ReportGeneratorJobConfig(BaseConfig):
     template_name: Optional[str] = None
     target_cells: Optional[CellSequence] = None
 
-# --- Font Processing Jobs (递归结构) ---
+# --- Font Processing Jobs ---
 
 class ConditionalStyle(BaseConfig):
     if_parent_contains: str
@@ -272,7 +292,6 @@ class TitleDefinition(BaseConfig):
     style: Optional[str] = None
     default_style: Optional[str] = None
     conditional_styles: Optional[List[ConditionalStyle]] = None
-    # 递归定义：子标题
     sub_definitions: Optional[List['TitleDefinition']] = None 
 
 class FontJobConfig(BaseConfig):
@@ -293,7 +312,7 @@ class ReportTextTemplates(BaseConfig):
     default_empty_exception_module: str
 
 # =============================================================================
-# 4. 根配置类 (AppConfig)
+# 4. 根配置类 (ExcelEngineConfig)
 # =============================================================================
 
 class ExcelEngineConfig(BaseConfig):
@@ -307,44 +326,54 @@ class ExcelEngineConfig(BaseConfig):
     report: ReportInputs
     report_text_templates: ReportTextTemplates
 
+    @classmethod
+    def from_app_config(cls, app_config_dict: Dict[str, Any]) -> 'ExcelEngineConfig':
+        """
+        工厂方法：从全局 AppConfig 字典中提取 'excel_engine' 部分
+        """
+        # 1. 提取 excel_engine 配置
+        # 这里的 key 必须与 config.yaml 中的 includes key 一致
+        excel_data = app_config_dict.get('excel_engine', {})
+        
+        # 2. 如果全局配置中有通用路径，可以在这里注入到 excel_data 中 (可选)
+        # global_paths = app_config_dict.get('path', {})
+        # if 'paths' in excel_data:
+        #    excel_data['paths']['log_dir'] = global_paths.get('logs', 'logs')
+
+        return cls(**excel_data)
+
 # =============================================================================
-# 5. 加载逻辑
+# 5. 加载逻辑 (保留单例，但推荐使用依赖注入)
 # =============================================================================
 
-_config_instance: Optional[ExcelEngineConfig] = None
+config: Optional[ExcelEngineConfig] = None 
 
-def load_config(yaml_path: str = "config/excel_engine_config.yaml") -> ExcelEngineConfig:
-    """读取 YAML 并转换为强类型的 ExcelEngineConfig 对象"""
-    global _config_instance
-    
-    if _config_instance:
-        return _config_instance
-
-    if not os.path.exists(yaml_path):
-        # 尝试查找相对路径，防止路径错误
-        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        # 这里假设 config 在项目根目录的 config 文件夹下，根据实际情况调整
-        alt_path = os.path.join(base_dir, "config", "excel_engine_config.yaml")
-        if os.path.exists(alt_path):
-            yaml_path = alt_path
-        else:
-            raise FileNotFoundError(f"配置文件未找到: {yaml_path}")
-
-    with open(yaml_path, 'r', encoding='utf-8') as f:
-        raw_data = yaml.safe_load(f)
-
-    _config_instance = ExcelEngineConfig(**raw_data)
-    return _config_instance
-
-# 全局单例对象，但在使用前建议先调用 load_config 确保路径正确
-config: ExcelEngineConfig = None # type: ignore
-
-TEMPLATE_FILE = Path(config.paths.template_file)
-TEMP_FILE = Path(config.paths.temp_file)
-LOG_DIR = Path(config.paths.log_dir)
-RESOURCES_DIR = Path(config.paths.resources_dir)
+# 为了兼容旧代码的路径引用
+# 注意：在 config 未初始化前，这些变量是不可用的
+# 我们将它们设为 Lazy Proxy 或者在 main 初始化后再引用
+# 最佳实践是不要在模块级别直接计算 Path(config.x)
 
 try:
     PROJECT_ROOT = Path(__file__).resolve().parents[4]
 except NameError:
     PROJECT_ROOT = Path.cwd()
+
+# 保留旧的 load_config 以兼容独立运行测试
+def load_config(yaml_path: str = "config/excel_engine_config.yaml") -> ExcelEngineConfig | None:
+    global config
+    if config: return config
+    
+    import yaml
+    if not os.path.exists(yaml_path):
+         # 尝试从 PROJECT_ROOT 找
+         yaml_path = os.path.join(PROJECT_ROOT, yaml_path)
+    
+    if os.path.exists(yaml_path):
+        with open(yaml_path, 'r', encoding='utf-8') as f:
+            data = yaml.safe_load(f)
+        config = ExcelEngineConfig(**data)
+        return config
+    else:
+        # 如果找不到文件，返回一个空的配置或者是 None，视情况而定
+        logging.warning(f"Standalone config not found: {yaml_path}")
+        return None
