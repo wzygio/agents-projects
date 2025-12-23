@@ -1,4 +1,4 @@
-# streamlit_app.py (V2.1 - 仅修改文件保存路径)
+# 文件路径：packages\ppt_engine\src\interface\app.py
 import yaml, os, sys, logging
 import datetime
 from datetime import timedelta
@@ -8,7 +8,7 @@ import shutil
 from pathlib import Path
 import streamlit as st
 
-from ppt_generator_project.config import CONFIG, RESOURCES_DIR, MAIN_PY_PATH,  OUTPUT_DIR
+from packages.ppt_engine.src.config import CONFIG, RESOURCES_DIR, MAIN_PY_PATH,  OUTPUT_DIR
 from ppt_generator_project.app.setup import AppSetup
 @st.cache_resource
 def init_portal_resources():

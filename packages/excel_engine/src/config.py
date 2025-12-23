@@ -2,6 +2,7 @@ import os
 import yaml
 from typing import List, Dict, Optional, Any, Union
 from pydantic import BaseModel, Field
+from pathlib import Path
 
 # =============================================================================
 # 1. 基础配置类 (核心兜底机制)
@@ -14,6 +15,18 @@ class BaseConfig(BaseModel):
     """
     def __getattr__(self, item) -> Any:
         return None
+    
+    # [新增] 允许通过 config['field'] 访问，实现对旧代码的兼容
+    def __getitem__(self, item):
+        # 尝试获取属性
+        value = getattr(self, item)
+        # 如果是 Pydantic 模型，可能需要转换，但在内存中我们希望保持对象状态
+        # 所以直接返回 getattr 的结果即可
+        return value
+
+    # [新增] 允许 'key' in config 的判断
+    def __contains__(self, item):
+        return hasattr(self, item)
 
 # =============================================================================
 # 2. 通用子组件配置 (复用于多个模块)
@@ -325,3 +338,13 @@ def load_config(yaml_path: str = "config/excel_engine_config.yaml") -> ExcelEngi
 
 # 全局单例对象，但在使用前建议先调用 load_config 确保路径正确
 config: ExcelEngineConfig = None # type: ignore
+
+TEMPLATE_FILE = Path(config.paths.template_file)
+TEMP_FILE = Path(config.paths.temp_file)
+LOG_DIR = Path(config.paths.log_dir)
+RESOURCES_DIR = Path(config.paths.resources_dir)
+
+try:
+    PROJECT_ROOT = Path(__file__).resolve().parents[4]
+except NameError:
+    PROJECT_ROOT = Path.cwd()

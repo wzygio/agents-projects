@@ -7,7 +7,7 @@ from pathlib import Path
 from zipfile import ZipFile, BadZipFile
 import unicodedata 
 
-from ppt_generator_project.config import LOG_DIR
+from packages.ppt_engine.src.config import LOG_DIR
 
 class Utils:
     @staticmethod

@@ -2,6 +2,7 @@
 import pandas as pd
 import logging
 from pathlib import Path
+from src.config import AppConfig
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +15,7 @@ class HLDataLoader:
     3. 实现 Parquet 自动缓存机制。
     注意：此类不包含任何业务逻辑 (如 Join, Calculate)。
     """
-    def __init__(self, config: dict):
+    def __init__(self, config: AppConfig):
         self.config = config
         # 使用 get 配合默认值，防止配置缺失导致崩溃
         self.input_dir = Path(str(self.config.get("path.hl_resources_dir", "./data/input")))

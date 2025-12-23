@@ -4,7 +4,7 @@ from typing import List
 from pptx import Presentation
 from pptx.presentation import Presentation as PptxPresentationObject
 
-from ppt_generator_project.utils.utils import Utils
+from utils.local_utils import Utils
 
 @staticmethod
 def _find_slides_by_title(prs: PptxPresentationObject, target_text: str | List[str], shape_name: str) -> List[int]:

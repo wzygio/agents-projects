@@ -1,4 +1,4 @@
-# core/section_generators/yield_data_section.py (V2.0 - 依赖注入重构版)
+# 文件路径：packages\ppt_engine\src\application\yield_data_section.py
 import logging, re, os
 import pandas as pd
 import numpy as np
@@ -13,12 +13,12 @@ from pptx.presentation import Presentation as PptxPresentationObject
 from openpyxl.utils import get_column_letter
 from openpyxl.utils.cell import coordinate_from_string, column_index_from_string
 
-from ppt_generator_project.utils.utils import Utils
-from ppt_generator_project.core.table_processor import TableProcessor
-from ppt_generator_project.core.element_processor import ElementProcessor
-from ppt_generator_project.infrastructure.excel_reader import ExcelReader
-from ppt_generator_project.infrastructure.ppt_reader import PptReader
-from ppt_generator_project.config import CONFIG, DATA_RAW_DIR, PROJECT_ROOT, RESOURCES_DIR
+from packages.ppt_engine.src.utils.local_utils import Utils
+from packages.ppt_engine.src.core.table_processor import TableProcessor
+from packages.ppt_engine.src.core.element_processor import ElementProcessor
+from packages.ppt_engine.src.infrastructure.excel_reader import ExcelReader
+from packages.ppt_engine.src.infrastructure.ppt_reader import PptReader
+from packages.ppt_engine.src.config import CONFIG, DATA_RAW_DIR, PROJECT_ROOT, RESOURCES_DIR
 
 # 设置 Pandas 的显示选项
 pd.set_option("display.max_rows", None)  # 显示所有行

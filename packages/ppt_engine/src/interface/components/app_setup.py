@@ -8,7 +8,7 @@ from pptx.dml.color import RGBColor
 from dotenv import load_dotenv
 import streamlit as st # 导入streamlit
 from dateutil.relativedelta import relativedelta
-from ppt_generator_project.utils.utils import Utils
+from packages.ppt_engine.src.utils.local_utils import Utils
 
 class AppSetup:
     @staticmethod

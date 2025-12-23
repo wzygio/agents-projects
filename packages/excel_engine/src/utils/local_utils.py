@@ -10,8 +10,7 @@ import openpyxl, datetime
 from typing import Optional
 from openpyxl import load_workbook
 from openpyxl.styles import Alignment
-from packages.excel_engine.src.config import PROJECT_ROOT, RESOURCES_DIR, LOG_DIR, RESOURCES_DIR
-
+from packages.excel_engine.src.config import PROJECT_ROOT, RESOURCES_DIR, LOG_DIR
 # Utils类 - 工具函数集合
 class Utils:
 

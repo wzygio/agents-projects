@@ -15,7 +15,7 @@ except IndexError:
 from src.config import config, PROJECT_ROOT
 from packages.common_utils.src.infrastructure.logger import setup_logging 
 from packages.anomaly_monitor.src.infrastructure.loader import HLDataLoader
-from src.web_controller.infrastructure.web.oled_portal import OLEDPortalPage
+from src.web_controller.infrastructure.oled_portal import OLEDPortalPage
 
 # 初始化模块级日志记录器
 logger = logging.getLogger("ReportDownloader")
@@ -29,7 +29,7 @@ class DailyReportDownloader:
         self.context = None
         self.page = None
         self.portal = None
-        self.loader = HLDataLoader()
+        self.loader = HLDataLoader(config)
         self.is_headless = bool(config.get('common.HEADLESS_MODE', False))
         
         # 设定下载目录

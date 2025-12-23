@@ -1,0 +1,294 @@
+# 文件路径：config\ppt_engine_config.yaml
+
+# =======================================================
+# A. 全局路径配置
+# =======================================================
+paths:
+  network_source_dir: '//10.71.4.18/合肥维信诺公共盘/23专项/大数据专项' # 公共盘数据源
+  resources_dir: 'resources' # 本地数据源
+  data_cache_dir: 'data/cache' # 数据缓存目录
+  data_raw_dir: 'data/raw' # 原始数据目录
+  log_dir: 'logs' # 日志目录
+  output_dir: 'output'
+
+  output_ppt: '大数据科日报.pptx'
+  output_template_ppt: '大数据科日报_template.pptx'
+  main_py_path: "main.py"
+  data_source_excel_FPY: 'V3入库良率by品类趋势与良率管控报表'
+  data_source_excel_anomaly: 'CT良率异常波动管理表'
+  data_source_excel_risk: '风险品汇总'
+  data_source_parquet_anomaly: 'ct_anomaly_data.parquet'
+  logo: 'logo.png'
+  
+  daily_report_template:
+    # 静态部分：在主公共盘路径下，存放所有年份文件夹的那个根目录
+    base_dir: '00 日报'
+    # 动态部分：文件名格式，{date} 会被程序替换为 MMDD 格式的日期
+    filename_format: '大数据科日报{date}.pptx'
+    # 注意：template_ppt这个键现在只作为程序运行最终结果的存放处，其初始值不再重要 
+
+  data_sources:
+    # 主模板作为一个特殊的数据源条目
+    - key_name: 'main_template' # 用一个特殊的键名来标识它
+      source_type: 'network'
+      filename: '' 
+      network_subdir: ''
+
+    # 第一个文件：良率数据
+    - key_name: 'data_source_excel_FPY'
+      filename: 'V3入库良率by品类趋势与良率管控报表'
+      source_type: 'upload' # <--- 指明这是一个本地文件，无需同步
+
+    # 第二个文件：异常管理
+    - key_name: 'data_source_excel_anomaly'
+      filename: 'CT良率异常波动管理表'
+      source_type: 'network' # <--- 指明这是一个公共盘文件
+      network_subdir: '02 量产良率\02 良率异常闭环管理' # <--- 为它指定专属的公共盘子目录
+
+    # 第三个文件：风险品管控 (假设它在公共盘根目录)
+    - key_name: 'data_source_excel_risk'
+      filename: '风险品汇总'
+      source_type: 'network' # <--- 指明是公共盘文件
+      # network_subdir 未定义，程序将使用 network_source_dir 作为根目录
+
+# =======================================================
+# B. 其它全局设置
+# =======================================================
+settings:
+  default_font: 'Gadugi'
+  author: '大数据科'
+
+# =======================================================
+# C. 所有章节的专属配置
+# =======================================================
+sections:
+
+  # 3. “各品类良率数据”章节的专属配置
+  yield_data:
+    rendering_params:
+      title_text: ["当日良率_直板LTPS(不含FIAA)", "当日良率_直板LTPO", "当日良率_折叠", "当日良率_中尺寸", "当日良率_穿戴"]
+    # 3.1 对应 CONFIG_FPY 的数据
+    data_config:
+      ppt_target_slides: [3, 4, 5, 6, 7]
+      sheet_names:
+        yield_trend: "入库良率趋势"
+        control_plan: "良率提升管控"
+      
+      # 查找的“锚点”文本，也就是我们的“标签”
+      categories: ["直板LTPS", "直板LTPO", "折叠", "中尺寸", "穿戴"]
+      
+      locators:
+        # 规则1: 在“入库良率趋势”这张表里如何定位
+        yield_trend_sheet:
+          # 告诉程序去哪一列寻找上面的'categories'作为锚点
+          anchor_column: 'B' 
+          # 找到锚点后，如何定位图片和语句
+          image:    { row_offset: 0, col_offset: 1 } # 图片: 同行(偏移0), 右边1列
+          sentence: { row_offset: 7, col_offset: 1 } # 语句: 下方7行, 右边1列
+
+        # 规则2: 在“良率提升管控”这张表里如何定位
+        control_plan_sheet:
+          # 告诉程序去哪一列寻找'categories'作为锚点
+          anchor_column: 'B'
+          # 找到锚点后，如何确定表格的范围
+          section_data: { start_row_offset: 0, height: 4 } # 表格: 从锚点所在行(偏移0)开始，总高度为4行
+      
+      # excel_sections 我们将保留'标题栏'的固定配置，其他类别的将由程序动态生成
+      excel_sections:
+        '标题栏': [2, 3]
+
+      # categories_titles 保持不变
+      categories_titles:
+        "直板LTPS": "当日良率_直板LTPS(不含FIAA)"
+        "直板LTPO": "当日良率_直板LTPO"
+        "折叠": "当日良率_折叠"
+        "中尺寸": "当日良率_中尺寸"
+        "穿戴": "当日良率_穿戴"
+
+    # 3.2 对应 LAYOUT_CONFIG_FPY 的数据
+    layout_config:
+      logo: {left: 0, top: 0.1, width: 3}
+      title: {left: 8.0, top: 0, width: 2.0, font_size: 22, font_name: '微软雅黑'} 
+      summary: {left: 0, top: 0.5, width: 10, height: 0.8, font_size: 9, font_name: '微软雅黑', fill_color: [183, 222, 232], placeholder_name: 'Text Placeholder 1'}
+      chart: {left: 0, top: 1.3, width: 10, height: 1.6}
+
+    # 3.3 对应 TABLE_LAYOUT_FPY 的数据
+    table_layout:
+      base:
+        left: 0
+        top: 2.8
+        width: 10
+        height: 0.4
+        font_name: '微软雅黑'
+        header_font_size: 7 
+        body_font_size: 7
+        
+        # --- 新的布局策略 ---
+        # 行高策略：简单粗暴，表头一个高度，内容一个高度
+        row_height_rules:
+          header: 0.35
+          body: 0.5
+          
+        # 列宽策略：默认宽度 + 特殊规则
+        col_width_rules:
+          default: 0.6  # 【默认】如果没命中规则，就用这个宽度 (英寸)
+          overrides:    # 【例外】列名关键词 : 宽度
+            "影响因素": 0.8
+            "改善/追赶措施": 3.2
+
+  # 4. “CT异常波动调查”章节的专属配置
+  anomaly_management:
+    sheet_name: 'CT异常波动调查'
+    specific_date: ''
+    
+    summary_params:
+      date_col_name: '通报日期'
+
+    rendering_params:
+      insert_at_index: 7
+      rows_per_slide: 3
+      title_text: "CT良率异常闭环管理"
+
+    layout:
+      logo: 
+        left: 0
+        top: 0.1
+        width: 3
+      title:
+        left: 8.0
+        top: 0
+        width: 2.0
+        font_size: 22
+        font_name: '微软雅黑'
+      summary:
+        left: 0
+        top: 0.5
+        width: 10
+        height: 0.5
+        font_size: 9
+        font_name: '微软雅黑'
+        # 注意：RGBColor对象在YAML中表示为纯数字列表
+        fill_color: [183, 222, 232]
+        placeholder_name: 'Text Placeholder 1'
+
+    table_layout:
+      # 静态配置
+      base:
+        left: 0
+        top: 1
+        width: 10
+        height: 0.4
+        font_name: '微软雅黑'
+        header_font_size: 6
+        body_font_size: 6
+        
+      # 动态计算所需的参数
+      calculations:
+        row_heights:
+          total_size: 5.0
+          primary_item_size: 1.2
+          primary_item_count: 4
+          secondary_item_count: 1
+          primary_is_first: false
+        col_widths:
+          narrow_col_params:
+            total_size: 10.0
+            primary_item_size: 5.6
+            primary_item_count: 1
+            secondary_item_count: 11
+            primary_is_first: false
+          # 使用结构化列表来描述复杂的组装模式
+          assembly_pattern:
+            # 共15列：[1:16]
+            - { type: 'narrow', count: 1 }
+            - { type: 'fixed', value: 0.6, count: 1 }
+            - { type: 'narrow', count: 1 }
+            - { type: 'fixed', value: 0.6, count: 1 }
+            - { type: 'narrow', count: 5 }
+            - { type: 'fixed', value: 2.2, count: 2 }
+            - { type: 'narrow', count: 4 }
+  
+  # 5. “风险品管控”章节的专属配置
+  # risk_control:
+  #   sheet_name: '风险品汇总'
+  #   excel_table_range: 'A1:AL30'
+  #   # 我们将需要保留的列名作为字符串存起来，稍后在代码中解析
+  #   columns_to_keep: 'A,B,C,N,O,AD,AE,AF,AG,AH,AI,AJ,AK,AL' # 14列
+    
+  #   rendering_params:
+  #     insert_at_index: 9
+  #     rows_per_slide: 15
+  #     title_text: "25年风险品释放管控"
+  #     # 本章的摘要比较简单，直接在配置里定义
+  #     summary_texts: [" ", " "]
+
+  #   layout:
+  #     logo:
+  #       left: 0
+  #       top: 0.1
+  #       width: 3
+  #     title:
+  #       left: 8.0
+  #       top: 0
+  #       width: 2.0
+  #       font_size: 22
+  #       font_name: '微软雅黑'
+  #     summary:
+  #       left: 0
+  #       top: 0.5
+  #       width: 10
+  #       height: 0.5
+  #       font_size: 9
+  #       font_name: '微软雅黑'
+  #       # 同样，RGBColor对象表示为纯数字列表
+  #       fill_color: [183, 222, 232]
+  #       placeholder_name: 'Summary'
+
+  #   table_layout:
+  #     # 静态配置
+  #     base:
+  #       left: 0
+  #       top: 1
+  #       width: 10
+  #       height: 0.4
+  #       font_name: '微软雅黑'
+  #       header_font_size: 6
+  #       body_font_size: 5
+  #       style_id: 'E929F9F4-4A8F-4326-A1B4-22849713DDAB'
+  #       # 固定的单元格合并范围
+  #       merge_ranges: 
+  #         - [0, 3, 0, 4]
+  #         - [0, 5, 0, 6]
+  #       # 需要应用色阶条件格式化的列索引
+  #       columns_to_colorize: [4, 6]
+  #       # 应用固定颜色的列的范围 (索引小于此值的列)
+  #       fixed_color_cols_end_index: 3
+  #       # 定义本表格使用的颜色
+  #       fixed_fill_color: [92, 147, 176]
+  #       header_font_color: [255, 255, 255]
+  #       body_default_fill_color: [255, 255, 255]
+  #       body_default_font_color: [0, 0, 0]
+        
+  #     # 动态计算所需的参数
+  #     calculations:
+  #       row_heights:
+  #         total_size: 4.2
+  #         primary_item_size: 0.25
+  #         primary_item_count: 16
+  #         secondary_item_count: 1
+  #         primary_is_first: false
+  #       col_widths:
+  #         narrow_col_params:
+  #           total_size: 10.0
+  #           primary_item_size: 5.0
+  #           primary_item_count: 1
+  #           secondary_item_count: 12
+  #           primary_is_first: false
+  #         # 描述更复杂的组装模式
+  #         assembly_pattern:
+  #           # 共14列
+  #           - { type: 'narrow', count: 2 }
+  #           - { type: 'fixed', value: 0.8, count: 1 }
+  #           - { type: 'narrow', count: 6 }
+  #           - { type: 'fixed', value: 4.2, count: 1 }
+  #           - { type: 'narrow', count: 4 }

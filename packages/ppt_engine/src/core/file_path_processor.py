@@ -3,6 +3,7 @@ import logging
 from typing import Dict
 from pathlib import Path
 from datetime import date, timedelta
+from typing import Dict, Any, Union
 
 def _find_monthly_template_dir(config: dict) -> tuple[Path, str]:
     """
@@ -67,7 +68,8 @@ def _find_daily_template_file(config: dict, search_dir: Path) -> str:
 
 
 
-def process_dynamic_settings(config: dict) -> dict:
+def process_dynamic_settings(config: Union[Dict[str, Any], Any]) -> Union[Dict[str, Any], Any]:
+    # ... 原有代码 ...
     """
     【主函数】在data_sources配置中，动态地查找并更新主模板的路径和文件名信息。
     核心流程：

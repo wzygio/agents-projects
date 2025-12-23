@@ -6,7 +6,7 @@ import pandas as pd
 from pptx import Presentation
 from pptx.shapes.graphfrm import GraphicFrame
 
-from ppt_generator_project.utils.utils import Utils
+from utils.local_utils import Utils
 
 class PptReader:
     """

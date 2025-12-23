@@ -1,6 +1,7 @@
 import os
 from typing import List, Dict, Optional, Any
 from pydantic import BaseModel, Field
+from pathlib import Path
 
 # --- 1. 定义基类：包含您的“方案一”魔法 ---
 class BaseConfig(BaseModel):
@@ -9,6 +10,7 @@ class BaseConfig(BaseModel):
     包含 __getattr__ 用于处理未定义的字段，防止编辑器爆红，
     同时允许代码在读取 YAML 中新增的临时字段时不报错。
     """
+
     def __getattr__(self, item) -> Any:
         # 这里可以选择返回 None，或者打印一个警告，或者直接 pass
         # 这样写之后，访问 config.path.undefined_field 不会报红线，只会返回 None
@@ -17,16 +19,25 @@ class BaseConfig(BaseModel):
 # --- 2. 定义各个子模块的配置模型 ---
 
 class CommonConfig(BaseConfig):
+    """
+    通用配置类，继承自BaseConfig，包含常用的配置项
+    """
     log_level: str = 'INFO'
     HEADLESS_MODE: bool = True
 
 class DataFilesConfig(BaseConfig):
-    hl_raw: str
-    batch_yield: str
-    hl_history: str
-    ct_yield: str
+    """
+    DataFilesConfig 类用于配置数据文件路径和相关设置
+    继承自 BaseConfig 基类，用于定义数据文件的基本配置项
+    """
+    hl_raw: str  # 原始高层数据文件路径
+    batch_yield: str  # 批量产量数据文件路径
+    hl_history: str  # 高层历史数据文件路径
+    ct_yield: str  # CT产量数据文件路径
     mwdl_raw: str = ''  # 给个默认值，因为 YAML 注释说可选
-    defect_group_dict: str
+
+    # 原始MWDL数据文件路径，设为空字符串作为默认值，表示该配置项为可选
+    defect_group_dict: str  # 缺陷分组字典文件路径
 
 class DataColumnsConfig(BaseConfig):
     prod_code: str = 'prod_code'
@@ -116,3 +127,8 @@ def load_config(yaml_path: str = "config.yaml") -> AppConfig:
 # 注意：这需要确保 config.yaml 在工作目录下，或者在 main 中先调用 load_config
 # 这里为了不报错，先设为 None，由您在主程序入口初始化
 config: AppConfig = None # type: ignore
+
+try:
+    PROJECT_ROOT = Path(__file__).resolve().parents[2]
+except NameError:
+    PROJECT_ROOT = Path.cwd()

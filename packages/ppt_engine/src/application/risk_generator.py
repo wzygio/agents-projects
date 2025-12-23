@@ -13,10 +13,10 @@ from pptx.dml.color import RGBColor
 from pptx.enum.text import PP_ALIGN, MSO_VERTICAL_ANCHOR
 from pptx.presentation import Presentation as PptxPresentationObject
 
-from ppt_generator_project.infrastructure.excel_reader import ExcelReader
-from ppt_generator_project.core.element_processor import ElementProcessor
-from ppt_generator_project.core.table_processor import TableProcessor
-from ppt_generator_project.config import CONFIG, DATA_RAW_DIR
+from packages.ppt_engine.src.infrastructure.excel_reader import ExcelReader
+from packages.ppt_engine.src.core.element_processor import ElementProcessor
+from packages.ppt_engine.src.core.table_processor import TableProcessor
+from packages.ppt_engine.src.config import CONFIG, DATA_RAW_DIR
 
 class RiskControlSectionGenerator:
     """

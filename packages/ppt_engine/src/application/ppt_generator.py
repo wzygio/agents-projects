@@ -1,19 +1,17 @@
-# core/ppt_generator.py (V2.0 - 最终整合版)
+# 文件路径：src\ppt_generator_project\ppt_generator.py
 import logging, os, sys, time
-import shutil
 from pathlib import Path
-import yaml
 from pptx import Presentation
 from pptx.presentation import Presentation as PptxPresentationObject
 
 # 导入所有我们需要的自定义模块
-from ppt_generator_project.config import load_and_process_config, RESOURCES_DIR, OUTPUT_DIR
-from ppt_generator_project.core.file_path_processor import process_dynamic_settings
-from ppt_generator_project.core.canvas_preprocessor import prepare_canvas 
-from ppt_generator_project.services.yield_data_section import YieldDataSectionGenerator
-from ppt_generator_project.services.anomaly_mgmt_section import AnomalyMgmtSectionGenerator
-from ppt_generator_project.services.risk_control_section import RiskControlSectionGenerator
-from ppt_generator_project.utils.utils import Utils
+from packages.ppt_engine.src.config import load_config, RESOURCES_DIR, OUTPUT_DIR
+from packages.ppt_engine.src.core.file_path_processor import process_dynamic_settings
+from packages.ppt_engine.src.core.canvas_preprocessor import prepare_canvas 
+from packages.ppt_engine.src.application.yield_generator import YieldDataSectionGenerator
+from packages.ppt_engine.src.application.anomaly_generator import AnomalyMgmtSectionGenerator
+from packages.ppt_engine.src.application.risk_generator import RiskControlSectionGenerator
+from packages.ppt_engine.src.utils.local_utils import Utils
 
 def run(config_path: str):
     """
@@ -47,15 +45,15 @@ def _prepare_environment(config_path: str) -> tuple[PptxPresentationObject, dict
     logging.info("--- 步骤1：开始环境与数据源预处理 ---")
     
     # 1. 加载基础配置
-    config = load_and_process_config(Path(config_path))
+    config = load_config(Path(config_path))
     
     # 检查是否存在运行时章节选择，如果不存在（例如直接运行main.py），则默认生成所有已定义的章节
-    if not config.get('runtime_settings', {}).get('sections_to_generate'):
+    if not config.get('runtime_settings', {}).get('sections_to_generate'): # type: ignore
         logging.warning("配置中未指定要生成的章节 (sections_to_generate)，将默认生成所有在 'sections' 中定义的章节。")
         if 'runtime_settings' not in config:
             config['runtime_settings'] = {}
         # 从主配置中提取所有章节的键名
-        all_defined_sections = list(config.get('sections', {}).keys())
+        all_defined_sections = list(config.get('sections', {}).keys()) # type: ignore
         config['runtime_settings']['sections_to_generate'] = all_defined_sections
         logging.info(f"默认生成的章节列表为: {all_defined_sections}")
         
