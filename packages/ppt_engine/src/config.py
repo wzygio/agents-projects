@@ -324,8 +324,8 @@ CONFIG: Optional[PptEngineConfig] = None
 
 # 旧的加载逻辑保留用于独立测试
 CONFIG_YAML_PATH = PROJECT_ROOT / "config" / "ppt_engine_config.yaml"
-
-def load_config(yaml_path: Path = CONFIG_YAML_PATH) -> PptEngineConfig | None:
+    
+def load_config(yaml_path: Path = CONFIG_YAML_PATH) -> PptEngineConfig:
     global CONFIG
     if CONFIG: return CONFIG
 
@@ -338,7 +338,6 @@ def load_config(yaml_path: Path = CONFIG_YAML_PATH) -> PptEngineConfig | None:
              # 在统一配置模式下，可能不需要这个文件存在，而是从内存加载
              # 但为了兼容旧的独立运行脚本，我们还是报个警
             logging.warning(f"Standalone PPT config not found: {yaml_path}")
-            return None
 
     with open(yaml_path, 'r', encoding='utf-8') as f:
         raw_data = yaml.safe_load(f)
@@ -364,12 +363,7 @@ if CONFIG_YAML_PATH.exists() or Path("config/ppt_engine_config.yaml").exists():
 # 导出常量 (使用 Lazy Proxy 思想，防止 Import 时报错)
 # 注意：只有当 CONFIG 被正确初始化后，这些常量才有效
 LOG_DIR = getattr(CONFIG.paths, 'log_dir', 'logs') if CONFIG else 'logs'
-RESOURCES_DIR = getattr(CONFIG.paths, 'resources_dir', 'resources') if CONFIG else 'resources'
-DATA_RAW_DIR = getattr(CONFIG.paths, 'data_raw_dir', 'data/raw') if CONFIG else 'data/raw'
-OUTPUT_DIR = getattr(CONFIG.paths, 'output_dir', 'output') if CONFIG else 'output'
-MAIN_PY_PATH = getattr(CONFIG.paths, 'main_py_path', 'main.py') if CONFIG else 'main.py'
-
-def load_and_process_config(path=None):
-    if path:
-        return load_config(Path(path))
-    return CONFIG
+RESOURCES_DIR = Path(getattr(CONFIG.paths, 'resources_dir', 'resources') if CONFIG else 'resources')
+DATA_RAW_DIR = Path(getattr(CONFIG.paths, 'data_raw_dir', 'data/raw') if CONFIG else 'data/raw')
+OUTPUT_DIR = Path(getattr(CONFIG.paths, 'output_dir', 'output') if CONFIG else 'output')
+MAIN_PY_PATH = Path(getattr(CONFIG.paths, 'main_py_path', 'main.py') if CONFIG else 'main.py')

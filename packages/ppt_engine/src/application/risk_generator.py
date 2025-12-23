@@ -1,8 +1,5 @@
 # core/section_generators/risk_control_section.py (V2.0 - 依赖注入重构版)
-import logging
-import re
-import math
-import os 
+import logging, re, math, os
 import pandas as pd
 import numpy as np
 from datetime import date, datetime
@@ -16,7 +13,7 @@ from pptx.presentation import Presentation as PptxPresentationObject
 from packages.ppt_engine.src.infrastructure.excel_reader import ExcelReader
 from packages.ppt_engine.src.core.element_processor import ElementProcessor
 from packages.ppt_engine.src.core.table_processor import TableProcessor
-from packages.ppt_engine.src.config import CONFIG, DATA_RAW_DIR
+from packages.ppt_engine.src.config import DATA_RAW_DIR
 
 class RiskControlSectionGenerator:
     """

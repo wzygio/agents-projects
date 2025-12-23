@@ -9,7 +9,7 @@ from pathlib import Path
 import streamlit as st
 
 from packages.ppt_engine.src.config import CONFIG, RESOURCES_DIR, MAIN_PY_PATH,  OUTPUT_DIR
-from ppt_generator_project.app.setup import AppSetup
+from packages.ppt_engine.src.interface.components.app_setup import AppSetup
 @st.cache_resource
 def init_portal_resources():
     AppSetup.initialize_app()
@@ -23,7 +23,7 @@ st.title("📊 PPT 自动化报告生成器")
 with st.sidebar:
     st.header("⚙️ 报告生成配置")
     st.subheader("全局设置")
-    output_filename = st.text_input("1. 输出PPT文件名", value=CONFIG['paths']['output_ppt'])
+    output_filename = st.text_input("1. 输出PPT文件名", value=CONFIG.paths.output_ppt)
     
     # 获取当前时间并判断上午/下午
     now = datetime.datetime.now()

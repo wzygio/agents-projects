@@ -1,6 +1,7 @@
 # 文件路径：src\ppt_generator_project\ppt_generator.py
 import logging, os, sys, time
 from pathlib import Path
+from typing import Any
 from pptx import Presentation
 from pptx.presentation import Presentation as PptxPresentationObject
 
@@ -34,7 +35,7 @@ def run(config_path: str):
 # =======================================================
 # 1. 预处理函数
 # =======================================================
-def _prepare_environment(config_path: str) -> tuple[PptxPresentationObject, dict]:
+def _prepare_environment(config_path: str) -> tuple[PptxPresentationObject, Any]:
     """
     【预处理函数】负责所有准备工作：
     1. 加载配置
@@ -44,52 +45,73 @@ def _prepare_environment(config_path: str) -> tuple[PptxPresentationObject, dict
     """
     logging.info("--- 步骤1：开始环境与数据源预处理 ---")
     
-    # 1. 加载基础配置
+    # 1. 加载基础配置 (返回的是强类型 PptEngineConfig 对象)
     config = load_config(Path(config_path))
     
-    # 检查是否存在运行时章节选择，如果不存在（例如直接运行main.py），则默认生成所有已定义的章节
-    if not config.get('runtime_settings', {}).get('sections_to_generate'): # type: ignore
+    # --- [关键修改] 使用对象属性访问替代字典访问 ---
+    
+    # 检查 runtime_settings 是否存在且有内容
+    # 注意：在我们的 Config 定义中，runtime_settings 默认为 {}，所以不会是 None，直接访问即可
+    if not (config.runtime_settings or {}).get('sections_to_generate'):
         logging.warning("配置中未指定要生成的章节 (sections_to_generate)，将默认生成所有在 'sections' 中定义的章节。")
-        if 'runtime_settings' not in config:
-            config['runtime_settings'] = {}
-        # 从主配置中提取所有章节的键名
-        all_defined_sections = list(config.get('sections', {}).keys()) # type: ignore
-        config['runtime_settings']['sections_to_generate'] = all_defined_sections
+        
+        # 既然是对象，直接赋值即可
+        if not config.runtime_settings:
+            config.runtime_settings = {}
+            
+        # 从 sections 对象中提取所有章节名
+        # config.sections 是 SectionMap 对象，我们在 BaseConfig 里实现了 keys() 方法
+        all_defined_sections = list(config.sections.keys())
+        
+        config.runtime_settings['sections_to_generate'] = all_defined_sections
         logging.info(f"默认生成的章节列表为: {all_defined_sections}")
         
-    # 2. 应用动态设置（这将丰富data_sources中的main_template条目）
+    # 2. 应用动态设置
+    # 注意：process_dynamic_settings 需要支持 Pydantic 对象
+    # 我们之前的 BaseConfig 兼容层在这里发挥作用，保证传进去的对象能像字典一样被读取
     config = process_dynamic_settings(config=config)
     
-    # 3. 遍历config中所有数据源配置项，确保它们都已在本地就位
-    for source_item in config.get('paths', {}).get('data_sources', []):
+    # 3. 遍历数据源配置 (使用 config.paths.data_sources)
+    # 注意：config.paths.data_sources 是一个 List[DataSourceItem] 对象列表
+    for source_item in config.paths.data_sources:
         try:
+            # _file_processor 内部可能还在用字典方式访问 source_item
+            # 由于 DataSourceItem 继承自 BaseConfig，它支持 source_item['filename'] 这种写法
             path = _file_processor(source_item, config)
-            logging.info(f"数据源 '{source_item.get('key_name')}' 已就绪: {path}")
+            logging.info(f"数据源 '{source_item.key_name}' 已就绪: {path}")
         except Exception as e:
-            logging.error(f"数据源 '{source_item.get('key_name')}' 同步失败: {e}")
+            logging.error(f"数据源 '{source_item.key_name}' 同步失败: {e}")
 
     logging.info("--- 所有文件源已准备就绪 ---")
 
     # 4. 加载并预处理画布
-    paths_cfg = config.get('paths', {})
-    local_resources_dir = Path(paths_cfg.get('base_dir', '.')) / paths_cfg.get('resources_dir', 'resources')
+    paths_cfg = config.paths # 直接获取 PathsConfig 对象
+    local_resources_dir = Path(paths_cfg.base_dir) / paths_cfg.resources_dir
     
     # 查找主模板文件名
     template_filename = ""
-    for item in paths_cfg.get('data_sources', []):
-        if item.get('key_name') == 'main_template':
-            filename = item.get('filename', '')
-            # 处理临时文件名，去掉开头的特殊字符
+    for item in paths_cfg.data_sources:
+        if item.key_name == 'main_template':
+            filename = item.filename
+            # 处理临时文件名
             if filename.startswith('~$'):
                 filename = filename[2:]
             template_filename = filename
             break
     
     if not template_filename:
-        raise ValueError("在配置处理后，无法确定最终的主模板文件名。")
+        # 如果配置里没写，尝试用 paths 下的 output_template_ppt 作为兜底
+        if paths_cfg.output_template_ppt:
+            template_filename = paths_cfg.output_template_ppt
+        else:
+            raise ValueError("在配置处理后，无法确定最终的主模板文件名。")
 
-    config['paths']['template_ppt'] = template_filename # 保存模板文件名
-    canvas_template_path = local_resources_dir / template_filename # 构建模板路径
+    # 更新模板路径 (注意：Pydantic 字段赋值)
+    # 这里的 template_ppt 可能是我们临时想存的一个字段，如果是 Config 定义里没有的
+    # 因为我们在 BaseConfig 里设置了 extra='allow'，所以这里直接赋值是合法的！
+    paths_cfg.output_template_ppt = template_filename 
+    
+    canvas_template_path = local_resources_dir / template_filename
     
     if not canvas_template_path.exists():
         raise FileNotFoundError(f"最终的画布模板文件在本地不存在: {canvas_template_path}")
@@ -97,11 +119,11 @@ def _prepare_environment(config_path: str) -> tuple[PptxPresentationObject, dict
     logging.info(f"文件 {canvas_template_path.name} 已复制，等待1秒以确保I/O句柄释放...")
     time.sleep(1) 
 
-    source_prs = Presentation(canvas_template_path) # 加载PPT模板
-    canvas_prs = prepare_canvas(source_prs, config) # 预处理画布（删除旧章节）
+    source_prs = Presentation(canvas_template_path)
+    canvas_prs = prepare_canvas(source_prs, config)
     
     logging.info("--- 环境与数据源预处理完毕 ---")
-    return canvas_prs, config # 返回预处理后的画布和配置
+    return canvas_prs, config
 
 
 def _file_processor(source_item: dict, config: dict) -> Path:

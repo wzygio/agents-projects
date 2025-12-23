@@ -1,9 +1,8 @@
 # core/dynamic_settings.py (V3.1 - 仅负责侦察路径版)
 import logging
-from typing import Dict
 from pathlib import Path
 from datetime import date, timedelta
-from typing import Dict, Any, Union
+from typing import Dict, Any
 
 def _find_monthly_template_dir(config: dict) -> tuple[Path, str]:
     """
@@ -68,7 +67,7 @@ def _find_daily_template_file(config: dict, search_dir: Path) -> str:
 
 
 
-def process_dynamic_settings(config: Union[Dict[str, Any], Any]) -> Union[Dict[str, Any], Any]:
+def process_dynamic_settings(config: Any) -> Any:
     # ... 原有代码 ...
     """
     【主函数】在data_sources配置中，动态地查找并更新主模板的路径和文件名信息。
