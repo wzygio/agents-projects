@@ -1,13 +1,25 @@
-# 文件路径：packages\ppt_engine\src\interface\app.py
 import yaml, os, sys
 import datetime
 from datetime import timedelta
 import subprocess
 import tempfile
 import streamlit as st
+from pathlib import Path
 
-from packages.ppt_engine.src.config import CONFIG, RESOURCES_DIR, MAIN_PY_PATH, OUTPUT_DIR
+# [修改 1] 导入 load_config 而不是 CONFIG
+# 同时导入 MAIN_PY_PATH 等常量作为备用，但尽量优先使用 config 对象中的值
+from packages.ppt_engine.src.config import load_config, MAIN_PY_PATH
+
 from packages.ppt_engine.src.interface.components.app_setup import AppSetup
+
+# [修改 2] 初始化配置对象
+# 这确保了无论 Streamlit 何时重启，我们都能拿到最新的、正确的配置
+config = load_config()
+
+# 为了代码简洁，提取一些常用路径 (确保转为 Path 对象或 str)
+# 注意：这里直接从 config 对象读取，比从 config.py 导入全局变量更安全
+RESOURCES_DIR = Path(config.paths.resources_dir)
+OUTPUT_DIR = Path(config.paths.output_dir)
 
 @st.cache_resource
 def init_portal_resources():
@@ -22,7 +34,8 @@ st.title("📊 PPT 自动化报告生成器")
 with st.sidebar:
     st.header("⚙️ 报告生成配置")
     st.subheader("全局设置")
-    output_filename = st.text_input("1. 输出PPT文件名", value=CONFIG.paths.output_ppt)
+    # [修改 3] 使用 config 实例访问属性
+    output_filename = st.text_input("1. 输出PPT文件名", value=config.paths.output_ppt)
     
     # 获取当前时间并判断上午/下午
     now = datetime.datetime.now()
@@ -46,7 +59,7 @@ with st.sidebar:
     
     st.info("请勾选本次报告需要生成的章节。")
     gen_yield_data = st.checkbox("良率数据章节", value=True)
-    gen_anomaly_management = st.checkbox("异常管理章节", value=True) # 使用了正确的长名称
+    gen_anomaly_management = st.checkbox("异常管理章节", value=True) 
     gen_risk_control = st.checkbox("风险品管控章节", value=False)
     
     st.divider()
@@ -75,7 +88,9 @@ if generate_button:
     # 创建临时目录（自动清理）：我们仍然需要 temp_dir 来存放临时的 config.yaml
     with tempfile.TemporaryDirectory() as temp_dir:
         try:
-            new_config = CONFIG.copy() # 复制基础配置
+            # [修改 4 - 关键修复] 使用 model_dump() 转换为纯字典
+            # config.copy() 是浅拷贝且返回 Pydantic 模型，不适合这里的字典操作和 YAML 序列化
+            new_config = config.model_dump() 
 
             # --- 1. 保存上传的日报模板文件并更新路径 ---
             if template_source == "手动上传新模板":
@@ -83,17 +98,17 @@ if generate_button:
                     saved_path = AppSetup.save_uploaded_file(uploaded_template_file, RESOURCES_DIR) 
 
                     # 将上传的模板文件的路径保存到新的配置中
+                    # 因为 new_config 现在是纯字典，所以可以直接用 key 访问
                     if 'template_ppt_source' not in new_config['paths']: new_config['paths']['template_ppt_source'] = {}
-                    new_config['paths']['template_ppt_source'] = {'type': 'uploaded', 'path': saved_path, 'filename': uploaded_template_file.name}
+                    new_config['paths']['template_ppt_source'] = {'type': 'uploaded', 'path': str(saved_path), 'filename': uploaded_template_file.name}
                 else:
                     st.error("错误：您选择了手动上传模板，但未上传任何文件。")
                     st.stop()
             
             # --- 2. 保存上传的数据文件并更新路径 ---
-            # 将键名与它们在data_sources列表中的索引对应起来，例如：{'source1': 0, 'source2': 1}
+            # data_sources 也是 list of dicts，因为我们用了 model_dump()
             key_to_index_map = {item['key_name']: i for i, item in enumerate(new_config['paths']['data_sources'])}
             
-            # 使用统一的、正确的键名 'anomaly_management'
             excel_uploads = {
                 'yield_data': 'data_source_excel_FPY',
                 'anomaly_management': 'data_source_excel_anomaly',
@@ -109,7 +124,7 @@ if generate_button:
                             # 有上传文件的情况
                             saved_path = AppSetup.save_uploaded_file(uploaded_files[section_key], RESOURCES_DIR)
                             new_config['paths']['data_sources'][idx]['source_type'] = 'uploaded'
-                            new_config['paths']['data_sources'][idx]['path'] = saved_path
+                            new_config['paths']['data_sources'][idx]['path'] = str(saved_path)
                         else:
                             # 没有上传文件的情况，使用网络数据源
                             new_config['paths']['data_sources'][idx]['source_type'] = 'network'
@@ -128,7 +143,10 @@ if generate_button:
             
             temp_config_path = os.path.join(temp_dir, 'temp_config.yaml')
             config_to_write = AppSetup.revert_colors_to_list(new_config)
-            with open(temp_config_path, 'w', encoding='utf-8') as f: yaml.dump(config_to_write, f, allow_unicode=True)
+            
+            # 使用 safe_dump 或 dump
+            with open(temp_config_path, 'w', encoding='utf-8') as f: 
+                yaml.dump(config_to_write, f, allow_unicode=True, sort_keys=False)
 
             # --- 调用后台进程 ---
             with st.spinner("配置准备就绪，正在调用核心生成引擎..."):
@@ -138,8 +156,9 @@ if generate_button:
                 process_env['PYTHONIOENCODING'] = 'utf-8'
 
                 # 执行main.py脚本
+                # 注意：MAIN_PY_PATH 可能是 Path 对象，subprocess 需要 str
                 result = subprocess.run(
-                    [python_executable, MAIN_PY_PATH, '--config', temp_config_path], 
+                    [python_executable, str(MAIN_PY_PATH), '--config', temp_config_path], 
                     capture_output=True, 
                     text=True, 
                     encoding='utf-8', 
@@ -150,7 +169,7 @@ if generate_button:
                 "returncode": result.returncode, # 0表示成功，非0表示失败
                 "stdout": result.stdout, # 标准输出
                 "stderr": result.stderr, # 标准错误
-                "output_dir": OUTPUT_DIR, # 输出目录
+                "output_dir": str(OUTPUT_DIR), # 输出目录 (确保转为str)
                 "output_filename": output_filename # 输出文件名
             }
             # 强制页面刷新，以便立刻显示新存入的结果
@@ -181,11 +200,14 @@ if st.session_state['last_run_result']:
         
         # 展示下载按钮
         output_file_path = os.path.join(str(result_data['output_dir']), str(result_data['output_filename']))
-        with open(output_file_path, "rb") as file:
-            st.download_button(
-                label="📥 点击下载生成的PPT报告", data=file, file_name=result_data['output_filename'],
-                mime="application/vnd.openxmlformats-officedocument.presentationml.presentation", use_container_width=True
-            )
+        if os.path.exists(output_file_path):
+            with open(output_file_path, "rb") as file:
+                st.download_button(
+                    label="📥 点击下载生成的PPT报告", data=file, file_name=result_data['output_filename'],
+                    mime="application/vnd.openxmlformats-officedocument.presentationml.presentation", use_container_width=True
+                )
+        else:
+            st.warning(f"报告生成显示成功，但未找到输出文件：{output_file_path}")
     else:
         # 失败的运行，展示所有能获取到的信息
         st.error("报告生成失败！请查看下面的详细信息：")

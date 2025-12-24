@@ -1,24 +1,28 @@
-# tests/test_data_processor.py
-import sys
+import sys, logging, re
+import shutil
+import openpyxl
+import datetime
 from pathlib import Path
-# 动态添加项目根目录到 sys.path
-sys.path.append(str(Path(__file__).parent.parent))
-
-import logging, re
-import pprint, shutil
-import openpyxl, datetime
 from typing import Optional
 from openpyxl import load_workbook
 from openpyxl.styles import Alignment
-from packages.excel_engine.src.config import PROJECT_ROOT, RESOURCES_DIR, LOG_DIR
+
+
 # Utils类 - 工具函数集合
 class Utils:
-
+    
     @staticmethod
-    def setup_logging(log_filename: str = "app.log"):
-        """初始化日志系统，输出到文件(覆盖模式)和控制台。"""
-        LOG_DIR.mkdir(parents=True, exist_ok=True)  
-        log_filepath = LOG_DIR / log_filename
+    def setup_logging(log_dir: Path, log_filename: str = "app.log"):
+        """
+        初始化日志系统，输出到文件(覆盖模式)和控制台。
+        
+        [重构变更] 增加 log_dir 参数，不再依赖全局 LOG_DIR。
+        """
+        # 确保目录存在
+        if not log_dir.exists():
+            log_dir.mkdir(parents=True, exist_ok=True)
+
+        log_filepath = log_dir / log_filename
 
         log_format = '%(asctime)s - %(levelname)s - [%(module)s] - %(message)s'
         log_date_format = '%Y-%m-%d %H:%M:%S'
@@ -34,7 +38,7 @@ class Utils:
                 root_logger.removeHandler(handler)
 
         try:
-            file_handler = logging.FileHandler(log_filepath, mode='w', encoding='utf-8') # <-- 添加 mode='w'
+            file_handler = logging.FileHandler(log_filepath, mode='w', encoding='utf-8') 
             file_handler.setFormatter(logging.Formatter(log_format, datefmt=log_date_format))
             root_logger.addHandler(file_handler)
         except Exception as e:
@@ -50,9 +54,11 @@ class Utils:
         logging.info(f"日志系统已初始化，将同时输出到文件 '{log_filepath}' (覆盖模式) 和控制台。")
 
     @staticmethod
-    def setup_test_environment(log_filename: str, log_level=logging.INFO):
+    def setup_test_environment(log_dir: Path, log_filename: str, log_level=logging.INFO):
         """
         (已重构) 配置日志系统，实现文件和控制台的双路输出。
+        
+        [重构变更] 增加 log_dir 参数，显式传入日志目录。
         """
         # 1. 获取根日志记录器
         root_logger = logging.getLogger()
@@ -69,8 +75,9 @@ class Utils:
         )
 
         # 4. 创建处理器 1: 写入到文件
-        LOG_DIR.mkdir(parents=True, exist_ok=True)
-        file_handler = logging.FileHandler(LOG_DIR / log_filename, mode='w', encoding='utf-8')
+        # [修改] 使用传入参数
+        log_dir.mkdir(parents=True, exist_ok=True)
+        file_handler = logging.FileHandler(log_dir / log_filename, mode='w', encoding='utf-8')
         file_handler.setLevel(log_level)
         file_handler.setFormatter(formatter)
         root_logger.addHandler(file_handler)
@@ -85,9 +92,12 @@ class Utils:
         logging.info(f"日志系统已初始化，将同时输出到文件 '{log_filename}' 和控制台。")
 
     @staticmethod
-    def extract_product_models(model_config: dict, custom_path: Optional[Path] = None) -> list:
+    def extract_product_models(model_config: dict, resources_dir: Path, custom_path: Optional[Path] = None) -> list:
         """
         (新的私有辅助方法) 执行提取tila_target的第一步：提取产品型号列表。
+        
+        [重构变更] 增加 resources_dir 参数。
+        调用方需传入: config.paths.resources_dir
         """
         # --- 1. 解析并验证配置 ---
         if custom_path:
@@ -97,7 +107,9 @@ class Utils:
             if not source_file:
                 logging.error("任务 'daily_yield_change' 配置中缺少 'source_file' 参数。")
                 return []
-        source_path = RESOURCES_DIR / Path(source_file)
+        
+        # [修改] 使用传入的 resources_dir 拼接路径
+        source_path = resources_dir / Path(source_file)
         
         sheet_name = model_config.get("sheet_name")
         pattern = model_config.get("pattern")
@@ -105,16 +117,11 @@ class Utils:
         step = model_config.get("step")
         end_row = model_config.get("end_row")
 
-        # if not all([source_path.is_file(), sheet_name, pattern, start_cell, isinstance(step, int), isinstance(end_row, int)]):
-        #     logging.error(" 步骤1 'step1_product_models' 配置不完整、类型错误或源文件不存在。")
-        #     return [] # 返回一个空列表
-
         # --- 1.1. 检查所有必需条件 ---
         # 检查源文件是否存在
         if not source_path.is_file():
+            # 这里抛出异常是合理的，由上层调用者捕获
             raise FileNotFoundError(f"步骤1 'step1_product_models' 错误：源文件不存在 - {source_path}")
-        if not source_path.exists():
-            raise FileNotFoundError(f"文件不存在: {source_path}")
         if not source_path.suffix.lower() == '.xlsx':
             raise ValueError(f"文件不是 .xlsx 格式: {source_path}")
 
@@ -154,10 +161,14 @@ class Utils:
 
     @staticmethod
     def get_safe_source_path(job_config: dict, 
+                            local_cache_dir: Path, # [重构变更] 必须显式传入缓存目录
                             path_key: str = "source_path",
                             file_key: str = "source_file") -> Optional[Path]:
         """
         (已重构) 增加了对Excel锁定文件的自动处理和文件名模糊匹配。
+        
+        [重构变更] 移除了内部对 PROJECT_ROOT / RESOURCES_DIR 的计算。
+        调用者负责计算好 'local_cache_dir' 的绝对路径并传进来。
         """
         source_directory = job_config.get(path_key)
         file_name = job_config.get(file_key)
@@ -172,8 +183,13 @@ class Utils:
         if not initial_target_path.is_file():
             logging.info(f"   精确匹配的文件不存在，尝试模糊匹配...")
             source_dir = Path(source_directory)
+            # 增加检查，防止源目录不存在导致崩溃
+            if not source_dir.exists():
+                 logging.error(f"   源目录不存在: {source_dir}")
+                 return None
+                 
             found_files = [f for f in source_dir.iterdir() 
-                        if f.is_file() and file_name in f.name]
+                           if f.is_file() and file_name in f.name]
             
             if found_files:
                 # 选择最新的文件
@@ -191,8 +207,9 @@ class Utils:
             return None
             
         # 复制净化后的、最终确定的文件
-        local_cache_dir = PROJECT_ROOT / RESOURCES_DIR
-        local_cache_dir.mkdir(parents=True, exist_ok=True)
+        # [修改] 使用传入的 local_cache_dir
+        if not local_cache_dir.exists():
+            local_cache_dir.mkdir(parents=True, exist_ok=True)
         
         return Utils.get_local_copy(final_path_to_copy, local_cache_dir)
 

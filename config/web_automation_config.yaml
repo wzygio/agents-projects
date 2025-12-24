@@ -9,81 +9,38 @@ browser:
   timeout: 30000
   slow_mo: 50
 
-# --- 模块：日报自动化 ---
-daily_report:
-  portal_url: 'http://10.73.17.76:8080/webroot/decision' # 请替换为实际内网地址
-  
-  # 2. [新增] 异常大数据值班当日新增不良HL模板配置 (对应截图 image_b0476b.png)
-  record_ledger:
-    # 请修改为您第二份表格的实际路径
-    path: 'D:/wzy/工作-值班工作/相关文件'
-    file_name: '大数据值班当日新增不良HL模板'
-    sheet_name: "2025每日HL"
-    
-    mapping:
-      A: "generated_report"
-      B: "interface_time"
-      C: "prod_code"
-      D: "defect_desc"
-      E: "oper_group"
-      F: "ratio"
-      G: "month_ratio"
-      H: "week_ratio"
-      I: "batch_ratio"
-      J: "worsening_text"
+# 业务输入数据 (YAML原生支持列表)
+inputs:
+  product_models: 
+    - 'C471'
+    - 'C472'
+    - 'C480'
+    - 'C516'
+    - 'D172'
+    - 'M588'
+    - 'M628'
+    - 'M660'
+    - 'M678'
+  reports:
+    - name: 'V3屏体良率日报-A版'
+      path: '目录/良率监控/综合良率'
+      
+    - name: 'V3良率及不良率By月周天汇总报表'
+      path: '目录/良率监控/综合良率'
+      
+    - name: 'V3良率及不良率By批次汇总报表'
+      path: '目录/良率监控/综合良率'
 
-  hl_ledger:
-    # 台账文件的绝对路径
-    path: 'D:/wzy/工作-值班工作/相关文件'
-    file_name: 'CT良率异常波动管理表'
-    sheet_name: "CT异常波动调查"
-    
-    # 字段映射: { Excel列号 : DataFrame中的字段名 }
-    mapping:
-      # A: "id"           # 如果不需要填序号，这一行可以注释掉
-      # B: "week_val"     # 如果没算周别，注释掉
-      C: "interface_time" # 通报日期 (对应 format: 2025/09/20 10:00)
-      D: "prod_code"      # 产品 (C516)
-      E: "defect_desc"    # 不良 (S向边缘Mura)
-      F: "oper_group"     # 不良站点 (MVI)
-      G: "ratio"          # 日良损 (0.0136 -> Excel会自动显示为 1.36% 如果单元格格式设好了)
-      H: "month_ratio"    # 当月
-      I: "week_ratio"     # 当周
-      J: "batch_ratio"    # 本批次
-      K: "generated_report" # 异常通报 (那个大段文本就在这里！)
+    # - name: 'V3入库良率by品类趋势与良率管控报表'
+      
+    # - name: 'V3入库良率还原By月周天报表'
+    #   path: '目录/良率监控/综合良率细项'
 
-  # 业务输入数据 (YAML原生支持列表)
-  inputs:
-    product_models: 
-      - 'C471'
-      - 'C472'
-      - 'C480'
-      - 'C516'
-      - 'D172'
-      - 'M588'
-      - 'M628'
-      - 'M660'
-      - 'M678'
-    reports:
-      - name: 'V3屏体良率日报-A版'
-        path: '目录/良率监控/综合良率'
-        
-      - name: 'V3良率及不良率By月周天汇总报表'
-        path: '目录/良率监控/综合良率'
-        
-      - name: 'V3良率及不良率By批次汇总报表'
-        path: '目录/良率监控/综合良率'
+    # - name: 'V3CT还原时序不良率报表'
+    #   path: '目录/良率监控/综合良率细项'
 
-      # - name: 'V3入库良率by品类趋势与良率管控报表'
-        
-      # - name: 'V3入库良率还原By月周天报表'
-      #   path: '目录/良率监控/综合良率细项'
+    # - name: 'V3CT修正良率及不良率By月周天报表'
+    #   path: '目录/良率监控/综合良率细项'
 
-      # - name: 'V3CT还原时序不良率报表'
-      #   path: '目录/良率监控/综合良率细项'
-
-      # - name: 'V3CT修正良率及不良率By月周天报表'
-      #   path: '目录/良率监控/综合良率细项'
-
-      # - name: 'V3屏体良率日报描述填报表'
+    # - name: 'V3屏体良率日报描述填报表'
 

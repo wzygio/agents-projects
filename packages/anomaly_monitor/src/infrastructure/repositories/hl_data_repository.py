@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 import logging
 from infrastructure.loader import HLDataLoader
-from packages.anomaly_monitor.src.config import CONFIG
+from packages.anomaly_monitor.src.config import load_config
 
 
 logger = logging.getLogger(__name__)
@@ -16,10 +16,8 @@ class HLDataRepository:
     3. 修复数据互斥问题：确保 CT 和 检测站点 数据并存。
     """
     def __init__(self):
-        # 依赖注入 Loader
-        if CONFIG is None:
-            raise ValueError("CONFIG 未初始化")
-        self.loader = HLDataLoader(CONFIG)
+        self.config = load_config()
+        self.loader = HLDataLoader(self.config)
 
     def get_processed_hl_data(self) -> pd.DataFrame:
         """

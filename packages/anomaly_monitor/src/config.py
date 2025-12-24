@@ -11,27 +11,79 @@ from pydantic import BaseModel, Field
 
 class BaseConfig(BaseModel):
     """
-    基础配置类。
-    配置 extra='ignore' 以便在集成模式下忽略全局配置中不相关的字段。
+    基础配置类 (终极兼容版)。
+    既支持 Pydantic 的强类型校验，
+    又通过魔术方法完美模拟了 Python 字典的行为，以兼容旧代码。
     """
     class Config:
-        extra = 'ignore'
-        populate_by_name = True # 允许通过字段名或 alias 填充
+        # 关键设置：允许运行时添加模型中未定义的字段（解决 runtime_settings 报错）
+        extra = 'allow' 
+        # 允许通过字段名或别名填充
+        populate_by_name = True
 
-    def __getattr__(self, item) -> Any:
+    # --- 1. 字典核心迭代方法 (解决 .keys() 报错) ---
+    def keys(self):
+        """模拟字典的 .keys()，返回所有字段名"""
+        return self.model_dump(by_alias=True).keys()
+
+    def values(self):
+        """模拟字典的 .values()，返回所有字段值"""
+        # 注意：这里我们返回 getattr 的结果，保持对象引用，而不是 dump 后的纯数据
+        return [getattr(self, k) for k in self.keys()]
+
+    def items(self):
+        """模拟字典的 .items()，返回 (key, value) 元组"""
+        return [(k, getattr(self, k)) for k in self.keys()]
+
+    # --- 2. 安全的 get 方法 ---
+    def get(self, key, default=None):
+        """
+        模拟字典的 .get()。
+        增强逻辑：如果属性存在但值为 None，且 default 不为 None，则返回 default。
+        """
+        value = getattr(self, key, None)
+        if value is None and default is not None:
+            return default
+        return value if value is not None else default
+
+    # --- 3. 基础字典访问 ---
+    def __getitem__(self, item):
+        val = getattr(self, item, None)
+        if val is None and item not in self.keys():
+             # 为了兼容旧代码，这里抛出 KeyError 是标准行为
+             # 但如果您的代码习惯依赖 None 返回，可以改为 return None
+             # 鉴于 extra='allow'，未定义字段应该能通过 setattr 添加进来
+             raise KeyError(f"'{item}' not found in configuration")
+        return val
+
+    def __setitem__(self, key, value):
+        setattr(self, key, value)
+
+    def __contains__(self, key):
+        return hasattr(self, key) or key in self.keys()
+
+    # --- 4. 解决 config.update({...}) ---
+    def update(self, other_dict: Dict[str, Any]):
+        for k, v in other_dict.items():
+            setattr(self, k, v)
+
+    # --- 5. 兜底方案 ---
+    def __getattr__(self, item):
+        if item.startswith('__'):
+            return super().__getattribute__(item)
         return None
 
 # =============================================================================
-# 2. Anomaly Monitor 专属配置模型
+# 2. 子模块配置模型 (根据 YAML 结构拆解)
 # =============================================================================
 
-# --- 对应 anomaly_monitor.yaml -> common ---
+# --- Section: common ---
 class CommonConfig(BaseConfig):
     log_level: str = "INFO"
-    # 使用 alias 兼容 YAML 中的大写命名，同时保持 Python 代码小写风格
+    # 兼容 YAML 中的大写 HEADLESS_MODE
     headless_mode: bool = Field(default=True, alias="HEADLESS_MODE")
 
-# --- 对应 anomaly_monitor.yaml -> data.files ---
+# --- Section: data ---
 class DataFilesConfig(BaseConfig):
     hl_raw: str
     batch_yield: str
@@ -40,24 +92,38 @@ class DataFilesConfig(BaseConfig):
     mwdl_raw: Optional[str] = None
     defect_group_dict: str
 
-# --- 对应 anomaly_monitor.yaml -> data.columns ---
 class DataColumnsConfig(BaseConfig):
     prod_code: str
     defect_desc: str
     batch: str
 
-# --- 对应 anomaly_monitor.yaml -> data ---
 class DataConfig(BaseConfig):
     files: DataFilesConfig
     columns: Optional[DataColumnsConfig] = None
 
-# --- 对应 anomaly_monitor.yaml -> path ---
+# --- Section: path ---
 class PathConfig(BaseConfig):
     input_path: str
     data_cache_path: str
     data_raw_dir: str
     hl_resources_dir: str
     log_dir: str
+
+# --- Section: daily_report (新增核心部分) ---
+class LedgerConfig(BaseConfig):
+    """
+    对应 record_ledger 和 hl_ledger 的通用结构
+    """
+    path: str
+    file_name: str
+    sheet_name: str
+    mapping: Dict[str, str] # 映射关系 A: "generated_report" 等
+
+class DailyReportConfig(BaseConfig):
+    portal_url: str
+    # 使用 Optional 是为了防止 YAML 中暂时注释掉某部分导致崩溃
+    record_ledger: Optional[LedgerConfig] = None
+    hl_ledger: Optional[LedgerConfig] = None
 
 # =============================================================================
 # 3. 聚合配置类 (AnomalyMonitorConfig)
@@ -70,6 +136,7 @@ class AnomalyMonitorConfig(BaseConfig):
     common: CommonConfig
     data: DataConfig
     path: PathConfig
+    daily_report: Optional[DailyReportConfig] = None # [新增] 关联 daily_report
 
     @classmethod
     def from_app_config(cls, app_config_dict: Optional[Dict[str, Any]] = None) -> 'AnomalyMonitorConfig':
@@ -79,26 +146,19 @@ class AnomalyMonitorConfig(BaseConfig):
         2. 独立模式：如果全局上下文缺失，加载本地 YAML。
         """
         # --- 模式一：集成模式 (Global Injection) ---
-        # 假设全局 config.yaml 中通过 includes 加载了本模块配置，并挂载在 'anomaly_monitor' key 下
         if app_config_dict and 'anomaly_monitor' in app_config_dict:
             logging.info("[AnomalyMonitor] Initializing from Global AppConfig context...")
             monitor_data = app_config_dict['anomaly_monitor']
-            
-            # [Context Injection] 可选：如果模块配置中缺失通用路径，可从全局 path 注入
-            # 但由于您的 yaml 自身包含了完整的 path 定义，这里直接使用模块内的配置即可
-            
             return cls(**monitor_data)
 
         # --- 模式二：独立/调试模式 (Standalone Mode) ---
         logging.warning("[AnomalyMonitor] No global config context. Switching to Standalone Mode.")
         
-        # 路径定位：packages/anomaly_monitor/src/config.py -> parents[2] = packages/anomaly_monitor
-        # 假设配置文件位于 packages/anomaly_monitor/config/anomaly_monitor.yaml
+        # 路径定位：packages/anomaly_monitor/src/config.py -> parents[2]
         try:
             package_root = Path(__file__).resolve().parents[2]
             local_config_path = package_root / "config" / "anomaly_monitor.yaml"
         except (NameError, IndexError):
-            # 兜底：假设在当前运行目录下
             local_config_path = Path("config/anomaly_monitor.yaml")
 
         if local_config_path.exists():
@@ -116,12 +176,6 @@ class AnomalyMonitorConfig(BaseConfig):
 
 CONFIG: Optional[AnomalyMonitorConfig] = None 
 
-# 自动定位项目根目录 (辅助)
-try:
-    PROJECT_ROOT = Path(__file__).resolve().parents[3]
-except (NameError, IndexError):
-    PROJECT_ROOT = Path.cwd()
-
 def load_config() -> AnomalyMonitorConfig:
     """
     独立运行时的加载入口 (Fallback)
@@ -136,6 +190,3 @@ def load_config() -> AnomalyMonitorConfig:
     except Exception as e:
         logging.error(f"AnomalyMonitor standalone load failed: {e}")
         raise
-
-# 默认不自动执行，等待 orchestrator 或 main 调用
-# CONFIG = load_config()

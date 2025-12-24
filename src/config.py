@@ -37,6 +37,7 @@ class PathConfig(BaseConfig):
     logs: str
     resources: str
     cache: str
+    logs_dir: str
 
 # =============================================================================
 # 2. 根配置模型 (AppConfig)
@@ -47,7 +48,7 @@ class AppConfig(BaseConfig):
     它将包含所有子模块的配置对象。
     """
     common: CommonConfig
-    path: PathConfig
+    paths: PathConfig
     
     # 子模块配置 (通过 includes 动态加载后注入)
     web_automation: Optional[WebAutomationConfig] = None

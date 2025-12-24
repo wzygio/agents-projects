@@ -4,12 +4,13 @@ import sys
 import os
 from pathlib import Path
 
+from packages.excel_engine.src.config import ExcelEngineConfig
 from packages.excel_engine.src.infrastructure.processor.data_processor import DataProcessor
 from packages.excel_engine.src.infrastructure.processor.exception_processor import ExceptionProcessor
 from packages.excel_engine.src.infrastructure.processor.report_processor import ReportGenerator
 
 class GenerateReportUseCase:
-    def __init__(self, config):  # 修改参数类型注解
+    def __init__(self, config: ExcelEngineConfig):  # 修改参数类型注解
     # 使用配置对象
         self.config = config
 

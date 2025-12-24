@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import List, Dict, Tuple
 
 # 引入配置加载器
-from src.config import config
+from packages.anomaly_monitor.src.config import load_config
 from packages.common_utils.src.utils.misc import Utils
 
 logger = logging.getLogger(__name__)
@@ -24,7 +24,8 @@ class HLLedgerRepository:
     """
     
     def __init__(self, config_key: str = "daily_report.hl_ledger"):
-        self.config = config
+        
+        self.config = load_config()
         
         # 1. 获取配置
         conf = self.config.get(config_key, {})

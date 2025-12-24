@@ -15,7 +15,8 @@ path:
   logs: "logs"
   resources: "resources"
   cache: "data/cache"
-
+  logs_dir: "logs"
+  
 # =============================================================================
 # [Part 2] 模块组装 (Module Assembly)
 # 核心：这里不写具体参数，而是通过 "includes" 指向子文件

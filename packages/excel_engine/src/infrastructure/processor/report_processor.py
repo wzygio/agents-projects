@@ -1,4 +1,4 @@
-# 文件路径：src\excel_generator_project\services\report_generator.py
+# 文件路径：packages\excel_engine\src\infrastructure\processor\report_processor.py
 import logging
 from pathlib import Path
 import shutil, re
@@ -7,6 +7,7 @@ from openpyxl.utils import get_column_letter
 from openpyxl.styles import Alignment
 
 # 假设 ExcelHandler 和 Utils 的路径如下
+from packages.excel_engine.src.config import ExcelEngineConfig
 from packages.excel_engine.src.infrastructure.excel_io import ExcelHandler
 from packages.excel_engine.src.utils.local_utils import Utils
 
@@ -14,7 +15,7 @@ class ReportGenerator:
     """
     报告生成器。负责接收来自各个处理器的数据，并将其写入到最终的Excel报告中。
     """
-    def __init__(self, template_path: Path, output_path: Path, config: dict):
+    def __init__(self, template_path: Path, output_path: Path, config: "ExcelEngineConfig"):
         """
         初始化报告生成器。
         """
@@ -22,8 +23,16 @@ class ReportGenerator:
         self.output_path = Path(output_path)
         self.config = config
         self.excel_handler = None
-        # 生成器也需要产品型号列表来确保写入顺序
-        self.product_models = Utils.extract_product_models(config.get('model_definitions', []))
+        
+        
+        # [标准 4] 显式传入 resources_dir
+        self.resources_dir = Path(self.config.paths.resources_dir)
+        model_defs_dict = self.config.model_definitions.model_dump()
+        self.product_models = Utils.extract_product_models(
+            model_defs_dict, 
+            resources_dir=self.resources_dir
+        )
+        
         logging.info("ReportGenerator 初始化成功。")
     
     def run(self):
@@ -45,16 +54,28 @@ class ReportGenerator:
             return
 
         # 步骤 2: 按顺序执行所有在配置中定义的写入任务
-        jobs = self.config.get('report_generator_jobs', [])
+        # [Standard 3] Type Access: 使用点号访问 jobs 列表
+        jobs = self.config.report_generator_jobs
+        
         logging.info(f"发现 {len(jobs)} 个报告生成任务...")
         for i, job_config in enumerate(jobs, 1):
-            job_type = job_config.get("job_type")
+            
+            # --- 核心修复：类型转换 (Pydantic Object -> Dict) ---
+            # 为了兼容下游使用 .get() 的旧逻辑，在此处统一转换为字典
+            if hasattr(job_config, 'model_dump'):
+                job_config_dict = job_config.model_dump() # Pydantic V2
+            elif hasattr(job_config, 'dict'):
+                job_config_dict = job_config.dict()       # Pydantic V1
+            else:
+                job_config_dict = dict(job_config)        # Fallback
+
+            job_type = job_config_dict.get("job_type")
             logging.info(f"--> 开始执行任务 {i}/{len(jobs)}: 类型 = {job_type}")
 
             if job_type == "write_processed_exceptions":
-                self._execute_write_processed_exceptions(job_config)
+                self._execute_write_processed_exceptions(job_config_dict)
             elif job_type == "write_summary_reports":
-                self._execute_write_summary_reports(job_config)
+                self._execute_write_summary_reports(job_config_dict)
             else:
                 logging.warning(f"未知的任务类型 '{job_type}'，已跳过。")
 
@@ -77,8 +98,12 @@ class ReportGenerator:
 
         # 1. 从配置中获取数据源的键名
         data_source_key = job_config.get('data_source_key')
-        # 从注入的外部数据中获取 ExceptionProcessor 的处理结果
-        processed_data = self.config.get('EXTERNAL_DATA', {}).get(data_source_key, {})
+        
+        # [Standard 3] Type Access / Runtime Injection
+        # EXTERNAL_DATA 通常是运行时挂载的，可能不在 Schema 中，使用 getattr 安全获取
+        # 如果 EXTERNAL_DATA 本身是字典，则使用 .get()；如果是对象，需根据实际情况调整
+        external_data = getattr(self.config, 'EXTERNAL_DATA', {})
+        processed_data = external_data.get(data_source_key, {})
 
         if not processed_data:
             logging.warning("  未在配置中找到有效的异常数据源，写入任务跳过。")
@@ -90,8 +115,11 @@ class ReportGenerator:
         rules = job_config.get('sequential_extraction_rules', {})
         module_definitions = rules.get('module_definitions', [])
 
-         # --- 核心修改 1: 在方法开头，获取默认的后备文本模板 ---
-        default_text = self.config.get("report_text_templates", {}).get(
+         # --- 核心改动 1: 获取文本模板 ---
+         # [Standard 3] Type Access: 访问 config.report_text_templates
+         # 假设 templates 是一个字典字段
+        templates = self.config.report_text_templates
+        default_text = templates.get(
             "default_empty_exception_module", 
             "错误: 默认模板 'default_empty_exception_module' 未在配置中定义。"
         )
@@ -157,8 +185,10 @@ class ReportGenerator:
 
         # 1. 从配置中获取数据源的键名和写入参数
         data_source_key = job_config.get('data_source_key')
-        # 从主流程注入的外部数据中，获取DataProcessor的处理结果
-        summary_data = self.config.get('EXTERNAL_DATA', {}).get(data_source_key, [])
+        
+        # [Standard 3] Type Access / Runtime Injection
+        external_data = getattr(self.config, 'EXTERNAL_DATA', {})
+        summary_data = external_data.get(data_source_key, [])
 
         if not summary_data:
             logging.warning("  未找到有效的摘要数据，写入任务跳过。")
@@ -170,7 +200,10 @@ class ReportGenerator:
         step = target_cells_cfg.get("step")
 
         # 2. 获取模板字符串
-        template_string = self.config.get("report_text_templates", {}).get(template_name)
+        # [Standard 3] Type Access
+        templates = self.config.report_text_templates
+        template_string = str(templates.get(template_name))
+        
         if not all([start_cell, step, template_string]):
             logging.error("  'write_summary_reports' 任务配置不完整，任务中止。")
             return

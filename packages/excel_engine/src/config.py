@@ -380,12 +380,6 @@ class ExcelEngineConfig(BaseConfig):
 # [重要] 变量名统一大写 CONFIG，以便 src/config.py 进行注入: excel_config_module.CONFIG = ...
 CONFIG: Optional[ExcelEngineConfig] = None 
 
-# 自动定位项目根目录 (用于脚本内部引用)
-try:
-    PROJECT_ROOT = Path(__file__).resolve().parents[3]
-except (NameError, IndexError):
-    PROJECT_ROOT = Path.cwd()
-
 def load_config(yaml_path: Optional[str] = None) -> ExcelEngineConfig:
     """
     [独立运行入口] 
@@ -402,7 +396,3 @@ def load_config(yaml_path: Optional[str] = None) -> ExcelEngineConfig:
     except Exception as e:
         logging.error(f"Standalone load failed: {e}")
         raise
-
-# 尝试在导入时自动初始化 (可选，视是否需要惰性加载而定)
-# 建议保留为 None，等待 orchestrator 或 src/config.py 显式初始化
-# CONFIG = load_config()

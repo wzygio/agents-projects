@@ -18,7 +18,7 @@ from packages.ppt_engine.src.core.table_processor import TableProcessor
 from packages.ppt_engine.src.core.element_processor import ElementProcessor
 from packages.ppt_engine.src.infrastructure.excel_reader import ExcelReader
 from packages.ppt_engine.src.infrastructure.ppt_reader import PptReader
-from packages.ppt_engine.src.config import CONFIG, DATA_RAW_DIR, PROJECT_ROOT, RESOURCES_DIR
+from packages.ppt_engine.src.config import DATA_RAW_DIR, PROJECT_ROOT, RESOURCES_DIR
 
 # 设置 Pandas 的显示选项
 pd.set_option("display.max_rows", None)  # 显示所有行

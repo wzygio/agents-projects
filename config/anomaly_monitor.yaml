@@ -1,4 +1,4 @@
-# --- 通用设置 ---
+# 文件路径：config\anomaly_monitor.yaml
 common:
   log_level: 'INFO'
   HEADLESS_MODE: True
@@ -25,3 +25,45 @@ path:
   data_raw_dir: 'D:/wzy/Python/agents-projects/data/raw'
   hl_resources_dir: '//10.71.7.15/大数据共享/12.良率监控日报自动化'
   log_dir: 'D:/wzy/Python/agents-projects/logs'
+
+# --- 模块：日报自动化 ---
+daily_report:
+  portal_url: 'http://10.73.17.76:8080/webroot/decision' # 请替换为实际内网地址
+  
+  # 对应“大数据值班当日新增不良HL模板”
+  record_ledger:
+    path: 'D:/wzy/工作-值班工作/相关文件'
+    file_name: '大数据值班当日新增不良HL模板'
+    sheet_name: "2025每日HL"
+    
+    mapping:
+      A: "generated_report"
+      B: "interface_time"
+      C: "prod_code"
+      D: "defect_desc"
+      E: "oper_group"
+      F: "ratio"
+      G: "month_ratio"
+      H: "week_ratio"
+      I: "batch_ratio"
+      J: "worsening_text"
+
+  # 对应“CT良率异常波动管理表”
+  hl_ledger:
+    path: 'D:/wzy/工作-值班工作/相关文件'
+    file_name: 'CT良率异常波动管理表'
+    sheet_name: "CT异常波动调查"
+    
+    # 字段映射: { Excel列号 : DataFrame中的字段名 }
+    mapping:
+      # A: "id"           # 如果不需要填序号，这一行可以注释掉
+      # B: "week_val"     # 如果没算周别，注释掉
+      C: "interface_time" # 通报日期 (对应 format: 2025/09/20 10:00)
+      D: "prod_code"      # 产品 (C516)
+      E: "defect_desc"    # 不良 (S向边缘Mura)
+      F: "oper_group"     # 不良站点 (MVI)
+      G: "ratio"          # 日良损 (0.0136 -> Excel会自动显示为 1.36% 如果单元格格式设好了)
+      H: "month_ratio"    # 当月
+      I: "week_ratio"     # 当周
+      J: "batch_ratio"    # 本批次
+      K: "generated_report" # 异常通报 (那个大段文本就在这里！)
