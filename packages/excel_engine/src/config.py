@@ -1,5 +1,6 @@
 import os
 import logging
+import yaml
 from typing import List, Dict, Optional, Any, Union
 from pathlib import Path
 from pydantic import BaseModel, Field, model_validator
@@ -44,10 +45,8 @@ class BaseConfig(BaseModel):
     # --- 3. 基础字典访问 ---
     def __getitem__(self, item):
         val = getattr(self, item, None)
+        # 修改：采用更稳健的判断，仅当 key 不存在且值为 None 时报错
         if val is None and item not in self.keys():
-             # 为了兼容某些宽松的旧代码，这里可以选择返回 None 还是报错
-             # 标准字典行为是报错，但您的方案一似乎倾向于返回 None
-             # 这里我们采用标准字典行为，因为 extra='allow' 已经允许动态存取了
              raise KeyError(f"'{item}' not found in configuration")
         return val
 
@@ -327,53 +326,83 @@ class ExcelEngineConfig(BaseConfig):
     report_text_templates: ReportTextTemplates
 
     @classmethod
-    def from_app_config(cls, app_config_dict: Dict[str, Any]) -> 'ExcelEngineConfig':
+    def from_app_config(cls, app_config_dict: Optional[Dict[str, Any]] = None) -> 'ExcelEngineConfig':
         """
-        工厂方法：从全局 AppConfig 字典中提取 'excel_engine' 部分
+        [双模启动工厂]
+        1. 优先尝试从全局 AppConfig 字典中提取 'excel_engine' 部分 (集成模式)。
+        2. 如果失败，尝试加载本地 'excel_engine_config.yaml' (独立模式)。
         """
-        # 1. 提取 excel_engine 配置
-        # 这里的 key 必须与 config.yaml 中的 includes key 一致
-        excel_data = app_config_dict.get('excel_engine', {})
+        # --- 模式一：集成模式 (Global Injection) ---
+        if app_config_dict and 'excel_engine' in app_config_dict:
+            logging.info("[ExcelEngine] Initializing from Global AppConfig context...")
+            
+            excel_data = app_config_dict['excel_engine'].copy()
+            
+            # [Context Injection] 注入全局路径 (可选)
+            # 如果全局配置里有 path.output，且子模块未定义，则覆盖
+            if 'path' in app_config_dict and 'paths' in excel_data:
+                 global_paths = app_config_dict['path']
+                 # 示例：确保 log_dir 跟随全局
+                 if 'logs' in global_paths:
+                      # 只有在 excel 配置没有显式指定时才覆盖，或者强制覆盖
+                      # excel_data['paths']['log_dir'] = global_paths['logs']
+                      pass
+
+            return cls(**excel_data)
+
+        # --- 模式二：独立/调试模式 (Standalone Mode) ---
+        logging.warning("[ExcelEngine] No global config context. Switching to Standalone Mode.")
         
-        # 2. 如果全局配置中有通用路径，可以在这里注入到 excel_data 中 (可选)
-        # global_paths = app_config_dict.get('path', {})
-        # if 'paths' in excel_data:
-        #    excel_data['paths']['log_dir'] = global_paths.get('logs', 'logs')
+        # 定位逻辑：当前文件在 packages/excel_engine/src/config.py
+        # 目标 YAML 在 packages/excel_engine/config/excel_engine_config.yaml (假设结构)
+        # 或者在项目根目录 config/excel_engine_config.yaml
+        
+        # 这里使用与 PPT Engine 一致的逻辑，向上查找 config 目录
+        try:
+            # parents[2] -> packages/excel_engine
+            local_config_path = Path(__file__).resolve().parents[2] / "config" / "excel_engine_config.yaml"
+        except (NameError, IndexError):
+             local_config_path = Path("config/excel_engine_config.yaml")
 
-        return cls(**excel_data)
+        if local_config_path.exists():
+            logging.info(f"[ExcelEngine] Loading local config from: {local_config_path}")
+            with open(local_config_path, 'r', encoding='utf-8') as f:
+                local_data = yaml.safe_load(f)
+            return cls(**local_data)
+        
+        # --- 兜底 ---
+        raise ValueError(f"Cannot initialize ExcelEngineConfig: No global context and local file not found at {local_config_path}")
 
 # =============================================================================
-# 5. 加载逻辑 (保留单例，但推荐使用依赖注入)
+# 5. 全局单例 (CONFIG)
 # =============================================================================
 
-config: Optional[ExcelEngineConfig] = None 
+# [重要] 变量名统一大写 CONFIG，以便 src/config.py 进行注入: excel_config_module.CONFIG = ...
+CONFIG: Optional[ExcelEngineConfig] = None 
 
-# 为了兼容旧代码的路径引用
-# 注意：在 config 未初始化前，这些变量是不可用的
-# 我们将它们设为 Lazy Proxy 或者在 main 初始化后再引用
-# 最佳实践是不要在模块级别直接计算 Path(config.x)
-
+# 自动定位项目根目录 (用于脚本内部引用)
 try:
-    PROJECT_ROOT = Path(__file__).resolve().parents[4]
-except NameError:
+    PROJECT_ROOT = Path(__file__).resolve().parents[3]
+except (NameError, IndexError):
     PROJECT_ROOT = Path.cwd()
 
-# 保留旧的 load_config 以兼容独立运行测试
-def load_config(yaml_path: str = "config/excel_engine_config.yaml") -> ExcelEngineConfig | None:
-    global config
-    if config: return config
+def load_config(yaml_path: Optional[str] = None) -> ExcelEngineConfig:
+    """
+    [独立运行入口] 
+    如果外部没有注入 CONFIG，则尝试手动加载。
+    主要用于单元测试或直接运行此文件。
+    """
+    global CONFIG
+    if CONFIG: return CONFIG
     
-    import yaml
-    if not os.path.exists(yaml_path):
-         # 尝试从 PROJECT_ROOT 找
-         yaml_path = os.path.join(PROJECT_ROOT, yaml_path)
-    
-    if os.path.exists(yaml_path):
-        with open(yaml_path, 'r', encoding='utf-8') as f:
-            data = yaml.safe_load(f)
-        config = ExcelEngineConfig(**data)
-        return config
-    else:
-        # 如果找不到文件，返回一个空的配置或者是 None，视情况而定
-        logging.warning(f"Standalone config not found: {yaml_path}")
-        return None
+    # 如果没传路径，使用工厂方法的默认逻辑
+    try:
+        CONFIG = ExcelEngineConfig.from_app_config(None) # 触发模式二
+        return CONFIG
+    except Exception as e:
+        logging.error(f"Standalone load failed: {e}")
+        raise
+
+# 尝试在导入时自动初始化 (可选，视是否需要惰性加载而定)
+# 建议保留为 None，等待 orchestrator 或 src/config.py 显式初始化
+# CONFIG = load_config()

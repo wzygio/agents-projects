@@ -8,8 +8,6 @@ try:
 except IndexError:
     pass 
 
-
-
 # 定义需要转换的文件名列表
 # 这里的名字必须和你最初从 Spotfire 导出的 txt 文件名一致
 TXT_FILES = [

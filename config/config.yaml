@@ -23,6 +23,7 @@ path:
 # =============================================================================
 includes:
   # Key (代码中引用的变量名) : Value (子文件路径)
-  web_automation: "config/web_automation.yaml"
+  anomaly_monitor: "config/anomaly_monitor.yaml"
   ppt_engine: "config/ppt_engine.yaml"
   excel_engine: "config/excel_engine.yaml"
+  web_automation: "config/web_automation.yaml"

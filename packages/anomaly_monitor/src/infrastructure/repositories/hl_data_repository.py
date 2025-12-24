@@ -1,7 +1,9 @@
 import pandas as pd
 import numpy as np
 import logging
-from ....common.infrastructure.hl_data_loader import HLDataLoader
+from infrastructure.loader import HLDataLoader
+from packages.anomaly_monitor.src.config import CONFIG
+
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +17,9 @@ class HLDataRepository:
     """
     def __init__(self):
         # 依赖注入 Loader
-        self.loader = HLDataLoader()
+        if CONFIG is None:
+            raise ValueError("CONFIG 未初始化")
+        self.loader = HLDataLoader(CONFIG)
 
     def get_processed_hl_data(self) -> pd.DataFrame:
         """

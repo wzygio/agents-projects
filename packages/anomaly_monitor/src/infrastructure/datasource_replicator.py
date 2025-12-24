@@ -5,7 +5,7 @@ from pathlib import Path
 import os, sys
 
 try:
-    sys.path.append(str(Path(__file__).resolve().parents[3]))
+    sys.path.append(str(Path(__file__).resolve().parents[4]))
 except IndexError:
     pass 
 from src.config import config

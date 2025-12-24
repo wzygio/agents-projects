@@ -298,16 +298,35 @@ class PptEngineConfig(BaseConfig):
     runtime_settings: Optional[Dict[str, Any]] = {}
 
     @classmethod
-    def from_app_config(cls, app_config_dict: Dict[str, Any]) -> 'PptEngineConfig':
+    def from_app_config(cls, app_config_dict: Optional[Dict[str, Any]] = None) -> 'PptEngineConfig':
         """
-        工厂方法：从全局 AppConfig 字典中提取 'ppt_engine' 部分
+        [双模启动] 支持从全局集成启动，也支持作为独立脚本启动。
         """
-        ppt_data = app_config_dict.get('ppt_engine', {})
+        # 1. 模式一：集成模式 (Production Mode)
+        # 如果主程序传来了有效的配置字典，直接提取使用
+        if app_config_dict and 'ppt_engine' in app_config_dict:
+            logging.info("Initializing from Global AppConfig...") # 记录来源
+            return cls(**app_config_dict['ppt_engine']) # 标准实例化
+
+        # 2. 模式二：独立/调试模式 (Standalone/Debug Mode)
+        # 如果没有传入配置（比如直接运行了子模块脚本），则加载本地测试配置
+        logging.warning("No global config found. Switching to Standalone Mode.") # 警告提示
         
-        # 兼容性处理：如果全局配置中有一些通用路径想注入，可以在这里做
-        # 但我们假设 ppt_engine.yaml 已经包含了所有必要信息
+        # 定义本地测试配置文件的路径
+        local_test_config = Path(__file__).parents[3] / "config" / "ppt_engine_config.yaml" # 定位文件
         
-        return cls(**ppt_data)
+        if local_test_config.exists():
+            logging.info(f"Loading local dev config: {local_test_config}") # 记录加载动作
+            with open(local_test_config, 'r', encoding='utf-8') as f:
+                dev_data = yaml.safe_load(f) # 读取 YAML
+            
+            # 这里还可以注入一些为了方便调试的特殊参数
+            dev_data['runtime_settings'] = {'debug_borders': True} # 开启调试边框
+            
+            return cls(**dev_data) # 返回测试用的配置对象
+        
+        # 3. 兜底：如果连测试配置都没找到，只能报错
+        raise ValueError("Cannot initialize PptEngine: No global config and no local dev config found.") # 抛出异常
 
 # =============================================================================
 # 5. 加载逻辑 (单例与兼容)
@@ -315,7 +334,7 @@ class PptEngineConfig(BaseConfig):
 
 # 确定项目根目录
 try:
-    PROJECT_ROOT = Path(__file__).resolve().parents[4]
+    PROJECT_ROOT = Path(__file__).resolve().parents[3]
 except NameError:
     PROJECT_ROOT = Path.cwd()
 
@@ -352,13 +371,6 @@ def load_config(yaml_path: Path = CONFIG_YAML_PATH) -> PptEngineConfig:
     except Exception as e:
         logging.error(f"PPT Config validation failed: {e}")
         raise
-
-# 尝试预加载 (如果文件存在)
-if CONFIG_YAML_PATH.exists() or Path("config/ppt_engine_config.yaml").exists():
-    try:
-        load_config()
-    except Exception:
-        pass # 忽略错误，等待主程序通过 from_app_config 初始化
 
 # 导出常量 (使用 Lazy Proxy 思想，防止 Import 时报错)
 # 注意：只有当 CONFIG 被正确初始化后，这些常量才有效

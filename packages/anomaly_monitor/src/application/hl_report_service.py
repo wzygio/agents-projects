@@ -5,7 +5,7 @@ from typing import List, Dict, Optional
 
 # 添加项目根目录到 path
 try:
-    sys.path.append(str(Path(__file__).resolve().parents[3]))
+    sys.path.append(str(Path(__file__).resolve().parents[4]))
 except IndexError: pass
 
 # 导入基础设施层

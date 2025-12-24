@@ -66,7 +66,6 @@ def _find_daily_template_file(config: dict, search_dir: Path) -> str:
     raise FileNotFoundError(f"在文件夹 '{search_dir.name}' 中，未找到最近3天内的日报文件。")
 
 
-
 def process_dynamic_settings(config: Any) -> Any:
     # ... 原有代码 ...
     """
