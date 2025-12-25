@@ -8,11 +8,12 @@ try:
     sys.path.append(str(Path(__file__).resolve().parents[4]))
 except IndexError:
     pass 
-from src.config import config
+from packages.anomaly_monitor.src.config import load_config
 
 # ================= 配置区域 =================
 # 共享盘路径 (源头)
-HL_RESOURCES_DIR = Path(str(config.path.hl_resources_dir))
+config = load_config()
+HL_RESOURCES_DIR = Path(str(config.paths.hl_resources_dir))
 
 # 关键文件名 (根据你的截图和日志推断)
 FILES = {

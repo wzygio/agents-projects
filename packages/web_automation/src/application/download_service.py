@@ -76,13 +76,13 @@ class DownloadService:
             self._setup_download_listener()
 
             # 2. 登录
-            self.portal_adapter.navigate_to_home(self.config.portal.portal_url)
-            if self.config.portal.username:
-                self.portal_adapter.login(self.config.portal.username, self.config.portal.password)
+            self.portal_adapter.navigate_to_home(self.config.daily_report.portal_url)
+            if self.config.daily_report.username:
+                self.portal_adapter.login(self.config.daily_report.username, self.config.daily_report.password)
 
             # 3. 遍历下载任务
-            for i, report in enumerate(self.config.portal.reports):
-                logger.info(f"--- 处理报表 [{i+1}/{len(self.config.portal.reports)}]: {report.name} ---")
+            for i, report in enumerate(self.config.daily_report.reports):
+                logger.info(f"--- 处理报表 [{i+1}/{len(self.config.daily_report.reports)}]: {report.name} ---")
                 
                 try:
                     # 3.1 进入报表

@@ -34,7 +34,8 @@ class AnomalyGenerator:
             config: 强类型的配置对象 (Dependency Injection)
         """
         self.prs = prs
-        self.config = config 
+        self.config = config
+        self.element_processor = ElementProcessor(self.config)
         
         # [Standard 3] Type Access (Hybrid Strategy):
         # 1. 访问 Config 对象下的 sections 属性 (点号访问)
@@ -151,7 +152,7 @@ class AnomalyGenerator:
         rows_per_slide = render_cfg.get('rows_per_slide', 3)
         title_text = render_cfg.get('title_text', "CT异常闭环管理")
 
-        blank_layout_index = ElementProcessor.find_layout_index_by_name(self.prs, "BLANK")
+        blank_layout_index = self.element_processor.find_layout_index_by_name(self.prs, "BLANK")
         if blank_layout_index is None:
             logging.error("在PPT模板中未找到名为'BLANK'的版式，无法创建新页面。请检查模板文件。")
             return
@@ -194,15 +195,15 @@ class AnomalyGenerator:
             
             layout_cfg = self.cfg.get('layout', {})
             # 使用动态获取的logo_path
-            ElementProcessor.add_logo(slide, str(logo_path), layout_cfg["logo"])
-            ElementProcessor.add_title(slide, title_text, layout_cfg["title"])
-            ElementProcessor.add_summary(slide, summary_list, layout_cfg["summary"])
+            self.element_processor.add_logo(slide, str(logo_path), layout_cfg["logo"])
+            self.element_processor.add_title(slide, title_text, layout_cfg["title"])
+            self.element_processor.add_summary(slide, summary_list, layout_cfg["summary"])
             
             self._add_table(slide, df_chunk)
 
         num_new_slides = len(self.prs.slides) - initial_slide_count
         if num_new_slides > 0:
-            ElementProcessor.reorder_slides(self.prs, initial_slide_count, num_new_slides, insert_at_index)
+            self.element_processor.reorder_slides(self.prs, initial_slide_count, num_new_slides, insert_at_index)
         logging.info(f"成功生成并插入 {num_new_slides} 页表格。")
 
     @staticmethod

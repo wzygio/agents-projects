@@ -28,7 +28,6 @@ path:
 
 # --- 模块：日报自动化 ---
 daily_report:
-  portal_url: 'http://10.73.17.76:8080/webroot/decision' # 请替换为实际内网地址
   
   # 对应“大数据值班当日新增不良HL模板”
   record_ledger:

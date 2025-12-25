@@ -1,10 +1,8 @@
-# 文件路径：packages\ppt_engine\src\application\yield_data_section.py
 import logging, re, os
 import pandas as pd
 import numpy as np
-from copy import deepcopy
-from tabulate import tabulate
-from typing import Dict, Any, List, Tuple, Optional
+from typing import Dict, Any, List, Tuple
+from pathlib import Path
 
 from pptx.util import Inches, Pt
 from pptx.dml.color import RGBColor
@@ -13,24 +11,28 @@ from pptx.presentation import Presentation as PptxPresentationObject
 from openpyxl.utils import get_column_letter
 from openpyxl.utils.cell import coordinate_from_string, column_index_from_string
 
+# 引入已重构的类
 from packages.ppt_engine.src.utils.local_utils import Utils
 from packages.ppt_engine.src.core.table_processor import TableProcessor
 from packages.ppt_engine.src.core.element_processor import ElementProcessor
 from packages.ppt_engine.src.infrastructure.excel_reader import ExcelReader
 from packages.ppt_engine.src.infrastructure.ppt_reader import PptReader
-from packages.ppt_engine.src.config import DATA_RAW_DIR, PROJECT_ROOT, RESOURCES_DIR
+from packages.ppt_engine.src.config import PptEngineConfig, ElementLayout, TableBaseLayout
 
 # 设置 Pandas 的显示选项
-pd.set_option("display.max_rows", None)  # 显示所有行
-pd.set_option("display.max_columns", None)  # 显示所有列
-pd.set_option("display.width", 1000)  # 设置显示宽度，避免换行
-pd.set_option("display.max_colwidth", None)  # 显示完整的列内容
+pd.set_option("display.max_rows", None)
+pd.set_option("display.max_columns", None)
+pd.set_option("display.width", 1000)
+pd.set_option("display.max_colwidth", None)
 
-# ==============================================================================
-#  第一章 “各品类良率数据” 的生成器类
-# ==============================================================================
+logger = logging.getLogger("YieldDataSectionGenerator")
+
 class YieldDataSectionGenerator:
-    # 类变量：样式配置
+    """
+    [Application Service]
+    负责生成PPT第一章“各品类良率数据”相关的所有页面。
+    """
+    
     DEFAULT_COLORS = {
         'header': RGBColor(217, 217, 217),
         'body': RGBColor(255, 255, 255),
@@ -38,32 +40,39 @@ class YieldDataSectionGenerator:
         'black': RGBColor(0, 0, 0)
     }
 
-    """
-    负责生成PPT第一章“各品类良率数据”相关的所有页面。
-    """
-    def __init__(self, prs: PptxPresentationObject, config: dict):
+    def __init__(self, 
+                 prs: PptxPresentationObject, 
+                 config: PptEngineConfig,
+                 element_processor: ElementProcessor,
+                 table_processor: TableProcessor):
+        """
+        :param prs: PPT对象
+        :param config: 强类型配置对象
+        :param element_processor: 注入的元素处理器实例
+        """
         self.prs = prs
-        self.config = config # 将传入的配置保存为实例变量
+        self.config = config
+        self.element_processor = element_processor
+        # TableProcessor 目前多为静态方法，但未来若改为实例，这里预留接口
+        self.table_processor = table_processor 
 
-        self.cfg = self.config.get('sections', {}).get('yield_data', {}) # 获取本章节的配置
-        self.data_cfg = self.cfg.get('data_config', {}) # 获取数据配置
-        self.layout_cfg = self.cfg.get('layout_config', {})
-        self.table_layout_cfg = self.cfg.get('table_layout', {}).get('base', {})
+        # 预先获取本章节的配置对象 (YieldDataConfig)。注意：这里使用属性访问 config.sections.yield_data
+        self.section_cfg = self.config.sections.yield_data
+        self.data_cfg = self.section_cfg.data_config
+        self.layout_cfg = self.section_cfg.layout_config or {}
         
+        # table_layout 也是个复杂对象，我们取其 base 部分
+        if self.section_cfg.table_layout:
+            self.table_layout_base = self.section_cfg.table_layout.base
+        else:
+            self.table_layout_base = None
+
         self.processed_data: Dict[str, Any] = {}
-        logging.info("YieldDataSectionGenerator 已初始化。")
-    
-    
-    # =======================================================
-    #  1. 公共主方法 (Public Main Method) - 对外的唯一接口
-    # =======================================================
+        logger.info("YieldDataSectionGenerator 已初始化。")
+
     def generate(self):
-        """
-        生成本章节所有页面的主方法。
-        包含：数据读取、处理、以及后续的PPT页面生成。
-        """
         """【最终实现】生成本章节所有页面的主方法。"""
-        logging.info("开始生成第一章：各品类良率数据...")
+        logger.info("开始生成第一章：各品类良率数据...")
         
         # 第一步：准备所有数据
         self._prepare_data()
@@ -71,45 +80,50 @@ class YieldDataSectionGenerator:
         # 第二步：根据准备好的数据，渲染所有页面
         self._render_slides()
         
-        logging.info("第一章生成完毕。")
+        logger.info("第一章生成完毕。")
 
-    # =======================================================
-    #  2. 内部数据准备阶段 (Internal Data Prep Stage)
-    # =======================================================
     def _prepare_data(self):
-        """
-        数据准备阶段的总调度方法。
-        负责协调查找文件、解析地址、读取数据和最终处理的流程。
-        """
-        logging.info("开始准备第一章所需的数据...")
+        """数据准备阶段的总调度方法。"""
+        logger.info("开始准备第一章所需的数据...")
 
         # 1. 查找Excel文件
-        paths_cfg = self.config.get('paths', {})
-        data_cache_dir = os.path.join(PROJECT_ROOT, paths_cfg.get('data_cache_dir', 'data/cache'))
-        excel_keyword = paths_cfg.get('data_source_excel_FPY', '入库良率')
-        excel_filename = Utils.find_latest_matching_file(RESOURCES_DIR, excel_keyword)
+        # 使用 self.config.paths 替代 config.get('paths')
+        self.paths_cfg = self.config.paths
+        
+        # 显式拼接路径，消除全局变量依赖
+        project_root = Path(self.paths_cfg.base_dir) if self.paths_cfg.base_dir else Path.cwd()
+        resources_dir = project_root / self.paths_cfg.resources_dir
+        data_cache_dir = project_root / self.paths_cfg.data_cache_dir
+        excel_keyword = self.paths_cfg.data_source_excel_FPY or '入库良率'
+        
+        # 调用 Utils 时传入明确路径
+        excel_filename = Utils.find_latest_matching_file(resources_dir, excel_keyword)
         if not excel_filename:
             return
-        excel_path = os.path.join(RESOURCES_DIR, excel_filename)
+        excel_path = resources_dir / excel_filename
 
-        # 2. 【核心】调用地址解析器，获取所有动态地址
-        address_maps = self._resolve_dynamic_addresses(excel_path)
+        # 2. 【核心】调用地址解析器
+        address_maps = self._resolve_dynamic_addresses(str(excel_path))
         
-        # 3. 使用动态生成的地址和范围，读取数据
-        sheet_names = self.data_cfg.get('sheet_names', {})
-        with ExcelReader(str(excel_path), sheet_names["yield_trend"]) as reader1:
+        # 3. 读取数据
+        # data_cfg 是 YieldDataConfig 对象，访问 sheet_names 字典
+        if self.data_cfg is None:
+            raise ValueError("Data configuration object is not initialized")
+        sheet_names = self.data_cfg.sheet_names
+
+        
+        with ExcelReader(str(excel_path), sheet_names.get("yield_trend", "Sheet1")) as reader1:
             image_paths = reader1.read_images(str(data_cache_dir), address_maps['image_addresses'])
             sentences = reader1.read_sentences(address_maps['sentence_addresses'])
 
-        with ExcelReader(str(excel_path), sheet_names["control_plan"]) as reader2:
-            # 此处我们暂时保留从一个大范围读取再拆分的逻辑
+        with ExcelReader(str(excel_path), sheet_names.get("control_plan", "Sheet1")) as reader2:
             full_data_list = reader2.read_table_as_list('B2:V23')
 
         if full_data_list is None:
-            logging.error("未能从Excel中读取到表格数据，终止本章生成。")
+            logger.error("未能从Excel中读取到表格数据，终止本章生成。")
             return
         
-        # 1. 【核心修复】 提取公共表头 (前两行)：我们假设 Excel 区域的前两行始终是表头 (Total / 各厂...)
+        # 1. 提取公共表头 (前两行)
         common_header_rows = full_data_list[:2]
 
         _, matrix_start_row = coordinate_from_string('B2')
@@ -117,70 +131,72 @@ class YieldDataSectionGenerator:
         
         excel_data_dfs = {}
         for category, body_rows in excel_data_lists.items():
-            # 3. 【核心修复】 表头回注 (Re-inject Headers)：将公共表头与当前品类的数据体拼接，形成一个完整的、带表头的表格
             complete_table = common_header_rows + body_rows
             standardized_df = self._standardize_table(complete_table)
             excel_data_dfs[category] = standardized_df
 
-        # 4. 读取PPT模板中的数据
+        # 4. 读取PPT模板中的数据 (使用注入的 config)
         ppt_reader = PptReader(config=self.config)
-        ppt_data_dict = ppt_reader.extract_ppt_tables(self.data_cfg["categories"], self.data_cfg["ppt_target_slides"])
+        ppt_data_dict = ppt_reader.extract_ppt_tables(
+            self.data_cfg.categories, 
+            self.data_cfg.ppt_target_slides
+        )
 
         illustration_texts = ppt_reader.extract_ppt_text(
-            categories=self.data_cfg.get("categories", []),
-            target_slides=self.data_cfg.get("ppt_target_slides", []),
+            categories=self.data_cfg.categories,
+            target_slides=self.data_cfg.ppt_target_slides,
             shape_name="Text Placeholder 1",
             keyword="当日良率不达目标说明："        
         )
         safeguards_texts = ppt_reader.extract_ppt_text(
-            categories=self.data_cfg.get("categories", []),
-            target_slides=self.data_cfg.get("ppt_target_slides", []),
+            categories=self.data_cfg.categories,
+            target_slides=self.data_cfg.ppt_target_slides,
             shape_name="Text Placeholder 1",
             keyword="月度良率达标保障措施："
         )
         
-        # 5. 数据融合与最终处理
-        final_table_data = self._update_data_by_factory(excel_data_dfs, ppt_data_dict, self.data_cfg['categories'])
+        # 5. 数据融合
+        final_table_data = self._update_data_by_factory(excel_data_dfs, ppt_data_dict, self.data_cfg.categories)
 
         self.processed_data = {
             "images": image_paths,
             "sentences": sentences,
             'table_data': final_table_data,
-            "titles": self.data_cfg["categories_titles"],
+            "titles": self.data_cfg.locators.categories_titles, # 访问深层对象属性
             "illustration_texts": illustration_texts,
             "safeguards_texts": safeguards_texts
         }
-        logging.info("第一章所需数据已成功准备完毕。")
+        logger.info("第一章所需数据已成功准备完毕。")
 
-    # ==============================================================================
-    #  2.1 读取Excel表格数据 (Read Excel Data)
-    # ==============================================================================
     def _resolve_dynamic_addresses(self, excel_path: str) -> Dict[str, Any]:
-        """
-        [新增] 动态地址解析器。
-        负责在Excel中查找所有锚点，并根据配置规则计算出图片、语句和表格的最终地址/范围。
-        """
-        # 1. 从配置中获取规则
-        categories = self.data_cfg.get('categories', [])
-        logging.info(f"开始解析动态地址，共涉及 {len(categories)} 个品类...")
-        locators = self.data_cfg.get('locators', {})
-        sheet_names = self.data_cfg.get('sheet_names', {})
+        """动态地址解析器。"""
+        # 使用对象属性访问
+        if self.data_cfg is not None:
+            categories = self.data_cfg.categories
+            logger.info(f"开始解析动态地址，共涉及 {len(categories)} 个品类...")
+            locators = self.data_cfg.locators
+            sheet_names = self.data_cfg.sheet_names
+        else:
+            raise ValueError("Data configuration object is not initialized")
         
-        # 2. 初始化结果容器
         resolved_maps = {
             'image_addresses': {},
             'sentence_addresses': {},
-            'excel_sections': self.data_cfg.get('excel_sections', {}) # 保留固定的'标题栏'
+            'excel_sections': locators.excel_sections # 直接获取
         }
 
-        # 3. 在“入库良率趋势”表中定位图片和语句
+        # 3. 在“入库良率趋势”表中定位
         trend_sheet_name = sheet_names.get('yield_trend')
-        trend_locators = locators.get('yield_trend_sheet', {})
-        if trend_sheet_name and trend_locators:
+        # locatorRule 对象
+        trend_locator = locators.yield_trend_sheet
+        
+        if trend_sheet_name and trend_locator:
             with ExcelReader(excel_path, trend_sheet_name) as reader:
-                anchor_map = reader.locate_anchors(categories, trend_locators.get('anchor_column', 'B'))
-                img_offset = trend_locators.get('image', {})
-                sent_offset = trend_locators.get('sentence', {})
+                anchor_map = reader.locate_anchors(categories, trend_locator.anchor_column)
+                
+                # img/sent 是字典或 None
+                img_offset = trend_locator.image
+                sent_offset = trend_locator.sentence
                 
                 for category, anchor_cell in anchor_map.items():
                     if img_offset:
@@ -192,15 +208,17 @@ class YieldDataSectionGenerator:
                             anchor_cell, sent_offset.get('row_offset', 0), sent_offset.get('col_offset', 0)
                         )
 
-        # 4. 在“良率提升管控”表中定位表格范围
+        # 4. 在“良率提升管控”表中定位
         control_sheet_name = sheet_names.get('control_plan')
-        control_locators = locators.get('control_plan_sheet', {})
-        if control_sheet_name and control_locators:
+        control_locator = locators.control_plan_sheet
+        
+        if control_sheet_name and control_locator:
             with ExcelReader(excel_path, control_sheet_name) as reader:
-                anchor_map = reader.locate_anchors(categories, control_locators.get('anchor_column', 'B'))
-                section_rule = control_locators.get('section_data', {})
-                start_offset = section_rule.get('start_row_offset', 0)
-                height = section_rule.get('height', 1)
+                anchor_map = reader.locate_anchors(categories, control_locator.anchor_column)
+                section_rule = control_locator.section_data
+                
+                start_offset = section_rule.get('start_row_offset', 0) if section_rule else 0
+                height = section_rule.get('height', 1) if section_rule else 1
                 
                 for category, anchor_cell in anchor_map.items():
                     _, start_row = coordinate_from_string(anchor_cell)
@@ -208,11 +226,7 @@ class YieldDataSectionGenerator:
                     final_end_row = final_start_row + height - 1
                     resolved_maps['excel_sections'][category] = [final_start_row, final_end_row]
         
-        logging.info("动态定位完成，生成的地址和范围如下:")
-        logging.info(f"Image Addresses: {resolved_maps['image_addresses']}")
-        logging.info(f"Sentence Addresses: {resolved_maps['sentence_addresses']}")
-        logging.info(f"Excel Sections: {resolved_maps['excel_sections']}")
-        
+        logger.info(f"Excel Sections: {resolved_maps['excel_sections']}")
         return resolved_maps
     
     @staticmethod
@@ -247,7 +261,7 @@ class YieldDataSectionGenerator:
             relative_start_idx = sec_start_abs - matrix_start_row
             relative_end_idx = sec_end_abs - matrix_start_row
             sub_tables[category] = data_matrix[relative_start_idx : relative_end_idx + 1]
-        logging.info("数据矩阵已成功按行拆分为子表。")
+        logger.info("数据矩阵已成功按行拆分为子表。")
         return sub_tables
     
     
@@ -259,7 +273,7 @@ class YieldDataSectionGenerator:
         输出: DataFrame (Columns: "Total_GAP", "Total_M12目标"...)
         """
         if not table_data or len(table_data) < 3:
-            logging.warning("表格数据不足以构成表头和内容，返回空DF。")
+            logger.warning("表格数据不足以构成表头和内容，返回空DF。")
             return pd.DataFrame()
 
         # 1. 分离表头和数据
@@ -276,7 +290,7 @@ class YieldDataSectionGenerator:
             df = YieldDataSectionGenerator._flatten_excel_header(df)
             
         except Exception as e:
-            logging.error(f"标准表头解析失败: {e}")
+            logger.error(f"标准表头解析失败: {e}")
             return pd.DataFrame()
 
         # 4. 数据清洗：去除空行
@@ -326,7 +340,7 @@ class YieldDataSectionGenerator:
             df = excel_data_dfs.get(category)
             
             if df is None or df.empty:
-                logging.warning(f"品类 {category} 没有对应的Excel数据，跳过。")
+                logger.warning(f"品类 {category} 没有对应的Excel数据，跳过。")
                 continue
 
             # 2. 【关键防御】处理列名重复问题
@@ -361,27 +375,26 @@ class YieldDataSectionGenerator:
         渲染PPT幻灯片的主方法
         该方法根据处理后的数据为每个品类创建一张幻灯片，并添加Logo、标题、图表、摘要和数据表格等元素
         """
-        logging.info("开始渲染第一章的PPT页面...")
+        logger.info("开始渲染第一章的PPT页面...")
         if not self.processed_data: # 如果processed_data为空，则说明数据尚未准备好
-            logging.error("数据尚未准备好，无法渲染页面。")
+            logger.error("数据尚未准备好，无法渲染页面。")
             return
         
         # 获取BLANK版式
-        blank_layout_idx = ElementProcessor.find_layout_index_by_name(self.prs, "BLANK")
+        blank_layout_idx = self.element_processor.find_layout_index_by_name(self.prs, "BLANK")
         if blank_layout_idx is None:
             raise ValueError("模板中未找到名为 'BLANK' 的版式!")
         blank_layout = self.prs.slide_layouts[blank_layout_idx]
         
         # 获取渲染配置
-        render_cfg = self.cfg.get('rendering_params', {}) # 获取渲染参数
+        render_cfg = self.config.get('rendering_params', {}) # 获取渲染参数
         initial_slide_count = len(self.prs.slides) # 获取当前幻灯片总页数
-        insert_at_index = render_cfg.get('insert_at_index', 2) # 默认插入位置为第2页
+        insert_at_index = render_cfg.get('insert_at_index', 2) if render_cfg is not None else 2
         categories = self.processed_data.get("titles", {}).keys() # 获取所有品类名称列表
 
         # 获取路径配置
-        paths_cfg = self.config.get('paths', {})  # 获取路径配置
-        logo_filename = paths_cfg.get('logo') # Logo文件名
-        logo_path = os.path.join(DATA_RAW_DIR, logo_filename) # 拼接完整的logo路径
+        logo_filename = self.paths_cfg.get('logo') if self.paths_cfg is not None else None # Logo文件名
+        logo_path = os.path.join(str(self.paths_cfg.data_raw_dir), str(logo_filename)) # 拼接完整的logo路径
 
         # 为每个品类生成页面
         for category in reversed(list(categories)): # 倒序处理以保证插入顺序
@@ -398,9 +411,9 @@ class YieldDataSectionGenerator:
             print("-" * 70)
             
             # 添加Logo、标题、图表
-            ElementProcessor.add_logo(slide, str(logo_path), self.layout_cfg["logo"])
-            ElementProcessor.add_title(slide, self.processed_data["titles"].get(category, ""), self.layout_cfg["title"])
-            ElementProcessor.add_chart(slide, self.processed_data["images"].get(category, ""), self.layout_cfg["chart"])
+            self.element_processor.add_logo(slide, str(logo_path), self.layout_cfg["logo"])
+            self.element_processor.add_title(slide, self.processed_data["titles"].get(category, ""), self.layout_cfg["title"])
+            self.element_processor.add_chart(slide, self.processed_data["images"].get(category, ""), self.layout_cfg["chart"])
             
             # 添加摘要文本
             illustration_text = self.processed_data.get("illustration_texts", {}).get(category, "")
@@ -415,10 +428,10 @@ class YieldDataSectionGenerator:
 
         num_new_slides = len(self.prs.slides) - initial_slide_count
         if num_new_slides > 0:
-            ElementProcessor.reorder_slides(self.prs, initial_slide_count, num_new_slides, insert_at_index)
+            self.element_processor.reorder_slides(self.prs, initial_slide_count, num_new_slides, insert_at_index)
 
     @staticmethod
-    def _add_summary(slide, illustration_text: str, summary_text: str, safeguards_text: str, cfg: dict):
+    def _add_summary(slide, illustration_text: str, summary_text: str, safeguards_text: str, cfg: ElementLayout):
         """
         [主控方法] FPY章节汇总生成入口。
         负责定位文本框，并按顺序调度三个板块的绘制。
@@ -428,7 +441,7 @@ class YieldDataSectionGenerator:
         target_shape = next((s for s in slide.shapes if s.name == placeholder_name), None)
         
         if not target_shape:
-            logging.error(f"未找到占位符: {placeholder_name}")
+            logger.error(f"未找到占位符: {placeholder_name}")
             return
 
         # 设置背景
@@ -562,11 +575,10 @@ class YieldDataSectionGenerator:
         [内部实例方法] 在幻灯片上创建表格。
         集成【表头净化】功能，解决 ('Total', 'GAP') 等元组显示问题。
         """
-        # --- 0. 基础配置与判空 ---
-        cfg = self.table_layout_cfg.copy() 
-        if df.empty:
-            logging.warning("传入的DataFrame为空，已跳过创建表格。")
-            return
+        # --- 0. 基础配置与判空 ---\
+        cfg = self.table_layout_base
+        if df.empty or cfg is None:
+            raise ValueError("df cannot be empty and cfg cannot be None")
 
         # 生成清洗后的表头列表
         clean_header_row = [self._sanitize_header(col) for col in df.columns]
@@ -587,12 +599,16 @@ class YieldDataSectionGenerator:
         cfg["col_widths"] = smart_dims["col_widths"]
         cfg["row_heights"] = smart_dims["row_heights"]
         
-        # 尺寸对齐补全 (防止列表长度不足)
+
         current_widths = cfg["col_widths"]
+        if current_widths is None:
+            raise ValueError("current_widths cannot be None")   
         if len(current_widths) < total_cols:
              current_widths += [current_widths[-1]] * (total_cols - len(current_widths))
         
         current_heights = cfg["row_heights"]
+        if current_heights is None:
+            raise ValueError("current_heights cannot be None")
         if len(current_heights) < total_rows:
             current_heights += [current_heights[-1]] * (total_rows - len(current_heights))
 
@@ -602,7 +618,7 @@ class YieldDataSectionGenerator:
         # --- 4. 创建表格 ---
         table_shape = slide.shapes.add_table(
             total_rows, total_cols,
-            Inches(cfg["left"]), Inches(cfg["top"]),
+            Inches(cfg.left), Inches(cfg.top),
             Inches(total_width), Inches(total_height)
         )
         ppt_table = table_shape.table
@@ -687,8 +703,12 @@ class YieldDataSectionGenerator:
         """
         [新功能] 根据 DataFrame 的列名和 Config 规则，智能计算行高和列宽列表。
         """
-        layout_cfg = self.table_layout_cfg
-        rules = layout_cfg.get('col_width_rules', {})
+        layout_cfg = self.table_layout_base
+        if layout_cfg is None:
+            raise ValueError("layout_cfg canot be None")
+        rules = layout_cfg.col_width_rules
+        if rules is None:
+            raise ValueError("col_width_rules is not initialized")
         default_width = rules.get('default', 0.6)
         overrides = rules.get('overrides', {})
         
@@ -700,6 +720,8 @@ class YieldDataSectionGenerator:
                 width = default_width
                 
                 # 关键词匹配
+                if not isinstance(overrides, dict):
+                    raise TypeError("overrides must be a dictionary")
                 for keyword, distinct_width in overrides.items():
                     if keyword in col_str:
                         width = distinct_width
@@ -708,6 +730,8 @@ class YieldDataSectionGenerator:
         
         # 2. 计算行高列表 (单行表头 + 数据行)
         rh_rules = layout_cfg.get('row_height_rules', {})
+        if rh_rules is None:
+            raise ValueError("rh_rules is not initialized")
         h_height = rh_rules.get('header', 0.5)
         b_height = rh_rules.get('body', 0.35)
         
@@ -749,13 +773,13 @@ class YieldDataSectionGenerator:
     
 
     @classmethod
-    def _get_style_config(cls, cfg: dict) -> tuple[dict, dict]:
+    def _get_style_config(cls, cfg: TableBaseLayout) -> tuple[dict, dict]:
         """生成表头和数据体的样式配置"""
         header_style = {
             "v_align": MSO_VERTICAL_ANCHOR.MIDDLE,
             "h_align": PP_ALIGN.CENTER,
             "fill_color": cls.DEFAULT_COLORS['header'],
-            "font_size": Pt(cfg["header_font_size"]),
+            "font_size": Pt(cfg.header_font_size),
             "font_name": cfg["font_name"],
             "bold": True,
             "font_color": cls.DEFAULT_COLORS['black']
@@ -764,7 +788,7 @@ class YieldDataSectionGenerator:
         body_style = {
             "v_align": MSO_VERTICAL_ANCHOR.MIDDLE,
             "fill_color": cls.DEFAULT_COLORS['body'],
-            "font_size": Pt(cfg["body_font_size"]),
+            "font_size": Pt(cfg.body_font_size),
             "font_name": cfg["font_name"],
             "bold": False
         }

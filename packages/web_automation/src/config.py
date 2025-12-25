@@ -102,23 +102,16 @@ class ReportItem(BaseConfig):
     name: str
     path: str
 
-# --- 对应 config.yaml 中的 daily_report.inputs ---
-class DailyReportInputs(BaseConfig):
-    product_models: List[str] = []
-    reports: List[ReportItem] = []
-
 # --- 对应 config.yaml 中的 daily_report ---
 class DailyReportConfig(BaseConfig):
     """
     对应 YAML 中的 'daily_report' 根节点
     """
     portal_url: str
-    
-    # 嵌套配置
-    record_ledger: Optional[LedgerConfig] = None
-    hl_ledger: Optional[LedgerConfig] = None
-    inputs: Optional[DailyReportInputs] = None
-    
+
+    product_models: List[str] = []
+    reports: List[ReportItem] = []
+
     # 动态注入的字段 (config.yaml 本身没写 username/password，通常是运行时的 secrets)
     username: Optional[str] = None
     password: Optional[str] = None

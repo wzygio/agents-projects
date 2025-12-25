@@ -1,15 +1,14 @@
 # utils/helpers.py
-import sys, logging
-import logging
-import os, shutil, re
+import sys, logging, os, re
 import subprocess
 from pathlib import Path
 from zipfile import ZipFile, BadZipFile
 import unicodedata 
+
 class Utils:
     
     @staticmethod
-    def setup_logging(log_dir: Path, log_filename: str = "app.log", log_level=logging.INFO):
+    def setup_logging(log_dir: Path = Path("logs"), log_filename: str = "app.log", log_level=logging.INFO):
         """
         (已重构) 配置日志系统，实现文件和控制台的双路输出。
         """

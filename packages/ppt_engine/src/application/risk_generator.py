@@ -29,6 +29,7 @@ class RiskControlSectionGenerator:
            
         self.prs = prs
         self.config = config # 保存传入的完整配置
+        self.element_processor = ElementProcessor(self.config)
         
         # 从传入的config中，安全地获取本章节的配置字典
         self.cfg = self.config.sections.risk_control
@@ -116,7 +117,7 @@ class RiskControlSectionGenerator:
         layout_cfg = self.cfg.get('layout', {})
 
         # 4. 查找空白幻灯片版式
-        layout_index = ElementProcessor.find_layout_index_by_name(self.prs, "BLANK")
+        layout_index = self.element_processor.find_layout_index_by_name(self.prs, "BLANK")
         if layout_index is None:
             logging.error("找不到名为 'BLANK' 的幻灯片版式。")
             return
@@ -146,15 +147,15 @@ class RiskControlSectionGenerator:
             # 创建新幻灯片
             slide = self.prs.slides.add_slide(blank_layout) # type: ignore
             # 添加元素 
-            ElementProcessor.add_logo(slide, str(logo_path), layout_cfg.get("logo", {})) # 添加logo
-            ElementProcessor.add_title(slide, title_text, layout_cfg.get("title", {})) # 添加标题
-            ElementProcessor.add_summary(slide, summary_list, layout_cfg.get("summary", {})) # 添加摘要
+            self.element_processor.add_logo(slide, str(logo_path), layout_cfg.get("logo", {})) # 添加logo
+            self.element_processor.add_title(slide, title_text, layout_cfg.get("title", {})) # 添加标题
+            self.element_processor.add_summary(slide, summary_list, layout_cfg.get("summary", {})) # 添加摘要
             self._add_table(slide, df_chunk) # 添加表格
 
         # 8. 重排幻灯片
         num_new_slides = len(self.prs.slides) - initial_slide_count
         if num_new_slides > 0:
-            ElementProcessor.reorder_slides(self.prs, initial_slide_count, num_new_slides, insert_at_index)
+            self.element_processor.reorder_slides(self.prs, initial_slide_count, num_new_slides, insert_at_index)
         logging.info(f"成功生成并插入 {num_new_slides} 页风险品管控表格。")
     
     def _add_table(self, slide, df: pd.DataFrame):

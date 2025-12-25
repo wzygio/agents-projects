@@ -9,6 +9,7 @@ from lxml import etree # type: ignore
 from pptx.util import Inches, Pt
 from pptx.dml.color import RGBColor
 from pptx.oxml.xmlchemy import OxmlElement
+from packages.ppt_engine.src.config import TableBaseLayout, TableLayoutConfig
 
 
 XML_PARSER = etree.XMLParser(remove_blank_text=True, encoding='utf-8')
@@ -67,7 +68,7 @@ class TableProcessor:
     
 
     @staticmethod
-    def _set_dimensions(ppt_table, cfg: Dict):
+    def _set_dimensions(ppt_table, cfg:TableBaseLayout):
         """
         [内部静态方法] 根据cfg配置字典，自适应地设置一个PPT表格对象的行高和列宽。
         """

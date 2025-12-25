@@ -120,8 +120,6 @@ class LedgerConfig(BaseConfig):
     mapping: Dict[str, str] # 映射关系 A: "generated_report" 等
 
 class DailyReportConfig(BaseConfig):
-    portal_url: str
-    # 使用 Optional 是为了防止 YAML 中暂时注释掉某部分导致崩溃
     record_ledger: Optional[LedgerConfig] = None
     hl_ledger: Optional[LedgerConfig] = None
 

@@ -9,8 +9,9 @@ browser:
   timeout: 30000
   slow_mo: 50
 
-# 业务输入数据 (YAML原生支持列表)
-inputs:
+daily_report:
+  portal_url: 'http://10.73.17.76:8080/webroot/decision' # 请替换为实际内网地址
+
   product_models: 
     - 'C471'
     - 'C472'
@@ -21,6 +22,7 @@ inputs:
     - 'M628'
     - 'M660'
     - 'M678'
+    
   reports:
     - name: 'V3屏体良率日报-A版'
       path: '目录/良率监控/综合良率'

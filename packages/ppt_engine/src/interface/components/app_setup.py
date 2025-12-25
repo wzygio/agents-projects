@@ -12,7 +12,7 @@ class AppSetup:
         该方法用于配置应用程序的日志记录功能，将日志信息输出到指定的文件中。
         """
 
-        Utils.setup_logging("app.log")
+        Utils.setup_logging(log_filename="app.log")
         logging.info("Application setup complete (logging initialized).")
 
     @staticmethod

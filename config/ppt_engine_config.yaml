@@ -68,6 +68,7 @@ sections:
   yield_data:
     rendering_params:
       title_text: ["当日良率_直板LTPS(不含FIAA)", "当日良率_直板LTPO", "当日良率_折叠", "当日良率_中尺寸", "当日良率_穿戴"]
+      insert_at_index: 2 # 指定插入位置，从0开始计数
     # 3.1 对应 CONFIG_FPY 的数据
     data_config:
       ppt_target_slides: [3, 4, 5, 6, 7]
@@ -109,7 +110,7 @@ sections:
     # 3.2 对应 LAYOUT_CONFIG_FPY 的数据
     layout_config:
       logo: {left: 0, top: 0.1, width: 3}
-      title: {left: 8.0, top: 0, width: 2.0, font_size: 22, font_name: '微软雅黑'} 
+      title: {left: 8.0, top: 0, width: 2.0, height: 0.6, font_size: 22, font_name: '微软雅黑'} 
       summary: {left: 0, top: 0.5, width: 10, height: 0.8, font_size: 9, font_name: '微软雅黑', fill_color: [183, 222, 232], placeholder_name: 'Text Placeholder 1'}
       chart: {left: 0, top: 1.3, width: 10, height: 1.6}
 
