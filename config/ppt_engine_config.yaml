@@ -4,12 +4,13 @@
 # A. 全局路径配置
 # =======================================================
 paths:
-  network_source_dir: '//10.71.4.18/合肥维信诺公共盘/23专项/大数据专项' # 公共盘数据源
+  base_dir: 'D:/wzy/Python/agents-projects'
   resources_dir: 'resources' # 本地数据源
   data_cache_dir: 'data/cache' # 数据缓存目录
   data_raw_dir: 'data/raw' # 原始数据目录
   log_dir: 'logs' # 日志目录
   output_dir: 'output'
+  network_source_dir: '//10.71.4.18/合肥维信诺公共盘/23专项/大数据专项' # 公共盘数据源
 
   output_ppt: '大数据科日报.pptx'
   output_template_ppt: '大数据科日报_template.pptx'

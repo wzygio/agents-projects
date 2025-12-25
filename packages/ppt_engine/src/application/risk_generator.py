@@ -10,16 +10,16 @@ from pptx.dml.color import RGBColor
 from pptx.enum.text import PP_ALIGN, MSO_VERTICAL_ANCHOR
 from pptx.presentation import Presentation as PptxPresentationObject
 
+from packages.ppt_engine.src.config import PptEngineConfig
 from packages.ppt_engine.src.infrastructure.excel_reader import ExcelReader
 from packages.ppt_engine.src.core.element_processor import ElementProcessor
 from packages.ppt_engine.src.core.table_processor import TableProcessor
-from packages.ppt_engine.src.config import DATA_RAW_DIR
 
 class RiskControlSectionGenerator:
     """
     负责生成PPT第三章“风险品释放管控”相关的所有页面。
     """
-    def __init__(self, prs: PptxPresentationObject, config: dict):
+    def __init__(self, prs: PptxPresentationObject, config: PptEngineConfig):
         """
         构造函数，初始化时会加载本章节专属的配置。
         """
@@ -31,8 +31,9 @@ class RiskControlSectionGenerator:
         self.config = config # 保存传入的完整配置
         
         # 从传入的config中，安全地获取本章节的配置字典
-        self.cfg = self.config.get('sections', {}).get('risk_control', {})
-        self.table_layout_cfg = self.cfg.get('table_layout', {}).get('base', {})
+        self.cfg = self.config.sections.risk_control
+        self.paths_cfg = self.config.paths
+
 
         self.processed_data: Dict[str, Any] = {}
         logging.info("RiskControlSectionGenerator 已初始化。")
@@ -52,10 +53,12 @@ class RiskControlSectionGenerator:
         """
         logging.info("开始准备第三章所需的数据...")
         try:
-            paths_cfg = self.config.get('paths', {})
-            base_dir = paths_cfg.get('base_dir', '.')
-            resources_dir = paths_cfg.get('resources_dir', 'resources')
-            excel_filename = paths_cfg.get('data_source_excel_risk')
+            if self.paths_cfg is None or self.cfg is None:
+                logging.error("路径配置或章节配置为空，请检查config。")
+                return
+            base_dir = self.paths_cfg.get('base_dir', '.')
+            resources_dir = self.paths_cfg.get('resources_dir', 'resources')
+            excel_filename = self.paths_cfg.get('data_source_excel_risk')
 
             sheet_name = self.cfg.get('sheet_name')
             excel_range = self.cfg.get('excel_table_range')
@@ -64,8 +67,8 @@ class RiskControlSectionGenerator:
             if not all([excel_filename, sheet_name, excel_range]):
                 logging.error("第三章配置不完整，请检查config。")
                 return
-
-            excel_path = os.path.join(base_dir, resources_dir, excel_filename)
+            
+            excel_path = os.path.join(str(base_dir), str(resources_dir), str(excel_filename))
             
             raw_df = ExcelReader.read_excel_range(
                 str(excel_path),
@@ -97,6 +100,10 @@ class RiskControlSectionGenerator:
         if df is None or df.empty:
             logging.warning("没有风险品数据可供渲染，已跳过此章节。")
             return
+        
+        if self.paths_cfg is None or self.cfg is None:
+            logging.error("路径配置为空，请检查config。")
+            return
 
         # 2. 获取渲染参数
         render_cfg = self.cfg.get('rendering_params', {})
@@ -123,9 +130,12 @@ class RiskControlSectionGenerator:
         num_slides_to_create = math.ceil(num_data_rows / rows_per_slide)
         logging.info(f"数据共 {num_data_rows} 行，每页 {rows_per_slide} 行，共需生成 {num_slides_to_create} 个新页面。")
         
-        paths_cfg = self.config.get('paths', {})
-        logo_filename = paths_cfg.get('logo')
-        logo_path = os.path.join(DATA_RAW_DIR, logo_filename)
+        self.paths_cfg = self.config.get('paths', {})
+        if self.paths_cfg is None:
+            logging.error("路径配置为空，请检查config。")
+            return
+        logo_filename = self.paths_cfg.get('logo')
+        logo_path = os.path.join(self.paths_cfg.data_raw_dir, logo_filename)
 
          # 7. 生成分页幻灯片
         for i in range(num_slides_to_create):
@@ -153,7 +163,10 @@ class RiskControlSectionGenerator:
         """
         # 1. 【核心修正】我们需要的【所有】表格相关配置，都在 table_layout.base 里
         # 我们直接把这个字典赋给 cfg，并在后续统一使用它
-        cfg = self.table_layout_cfg
+        if self.cfg is None:
+            logging.error("配置文件未加载。")
+            return
+        cfg = self.cfg.get('table_layout', {}).get('base', {})
             
         # 2. 准备数据和表格对象
         # 获取列的多级索引层数（如普通表格为1层，多级表头可能为2层）    

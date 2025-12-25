@@ -8,12 +8,12 @@ try:
     sys.path.append(str(Path(__file__).resolve().parents[4]))
 except IndexError:
     pass 
-from src.config import config
-
+from packages.anomaly_monitor.src.config import load_config
 
 # ================= 配置区域 =================
 # 你的数据目录
-HL_RESOURCES_DIR = Path(str(config.get("path.hl_resources_dir")))
+config = load_config()
+HL_RESOURCES_DIR = Path(str(config.paths.hl_resources_dir))
 DATA_RAW_DIR = Path(str(config.get("path.data_raw_dir")))
 
 # 定义源文件 (xlsx) 和目标文件 (parquet)

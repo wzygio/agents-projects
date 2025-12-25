@@ -1,8 +1,6 @@
-import os
-import sys
 import logging
 from pathlib import Path
-from typing import List, Dict, Optional, Any, Union, Literal, TYPE_CHECKING
+from typing import List, Dict, Optional, Any, Union, Literal
 import yaml
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -331,106 +329,25 @@ class PptEngineConfig(BaseConfig):
         raise ValueError("Cannot initialize PptEngine: No global config and no local dev config found.") # 抛出异常
 
 # =============================================================================
-# 5. 加载逻辑 (单例与兼容)
+# 5. 全局单例 (CONFIG)
 # =============================================================================
 
-# 全局单例
-CONFIG: Optional[PptEngineConfig] = None
+# [重要] 变量名统一大写 CONFIG，以便 src/config.py 进行注入: excel_config_module.CONFIG = ...
+CONFIG: Optional[PptEngineConfig] = None 
 
-# 旧的加载逻辑保留用于独立测试
-CONFIG_YAML_PATH = PROJECT_ROOT / "config" / "ppt_engine_config.yaml"
-    
-def load_config(yaml_path: Path = CONFIG_YAML_PATH) -> PptEngineConfig:
+def load_config(yaml_path: Optional[str] = None) -> PptEngineConfig:
+    """
+    [独立运行入口] 
+    如果外部没有注入 CONFIG，则尝试手动加载。
+    主要用于单元测试或直接运行此文件。
+    """
     global CONFIG
     if CONFIG: return CONFIG
-
-    if not yaml_path.exists():
-        # 尝试查找相对路径
-        alt_path = Path("config/ppt_engine_config.yaml")
-        if alt_path.exists():
-            yaml_path = alt_path
-        else:
-             # 在统一配置模式下，可能不需要这个文件存在，而是从内存加载
-             # 但为了兼容旧的独立运行脚本，我们还是报个警
-            logging.warning(f"Standalone PPT config not found: {yaml_path}")
-
-    with open(yaml_path, 'r', encoding='utf-8') as f:
-        raw_data = yaml.safe_load(f)
-
-    if 'paths' in raw_data:
-        raw_data['paths']['base_dir'] = str(PROJECT_ROOT)
-
+    
+    # 如果没传路径，使用工厂方法的默认逻辑
     try:
-        CONFIG = PptEngineConfig(**raw_data)
-        logging.info(f"PPT Config loaded from file: {yaml_path}")
+        CONFIG = PptEngineConfig.from_app_config(None) # 触发模式二
         return CONFIG
     except Exception as e:
-        logging.error(f"PPT Config validation failed: {e}")
+        logging.error(f"Standalone load failed: {e}")
         raise
-
-# =============================================================================
-# 6. 动态常量导出 (The Magic)
-# =============================================================================
-
-# 1. 首先，【删除】原来的那些静态赋值语句！
-# LOG_DIR = ... (删除)
-# RESOURCES_DIR = ... (删除)
-# ... (全部删除)
-
-# 2. 定义映射关系：常量名 -> 如何从 CONFIG 对象中获取
-_LAZY_MAPPING = {
-    'LOG_DIR': lambda c: c.paths.log_dir,
-    'RESOURCES_DIR': lambda c: c.paths.resources_dir,
-    'DATA_RAW_DIR': lambda c: c.paths.data_raw_dir,
-    'OUTPUT_DIR': lambda c: c.paths.output_dir,
-    'MAIN_PY_PATH': lambda c: c.paths.main_py_path,
-}
-
-# 3. 定义模块级 __getattr__
-def __getattr__(name: str):
-    """
-    当外部代码尝试 import LOG_DIR 时，如果 LOG_DIR 没定义，
-    Python 会自动调用这个函数。
-    """
-    if name in _LAZY_MAPPING:
-        # A. 检查 CONFIG 是否已加载
-        global CONFIG
-        if CONFIG is None:
-            # 关键：如果还没加载，为了避免报错，我们在这里尝试“自动触发”加载
-            # 这就是“懒加载”的精髓：用到的时候再加载
-            try:
-                # 尝试加载 (会触发 load_config 的查找逻辑)
-                load_config()
-            except Exception as e:
-                logging.warning(f"Lazy load failed for {name}: {e}")
-                # 如果加载失败，返回一个安全的默认值兜底，防止崩溃
-                defaults = {
-                    'LOG_DIR': 'logs',
-                    'RESOURCES_DIR': 'resources',
-                    'DATA_RAW_DIR': 'data/raw',
-                    'OUTPUT_DIR': 'output',
-                    'MAIN_PY_PATH': 'main.py'
-                }
-                return Path(defaults.get(name, '.'))
-
-        # B. 从 CONFIG 中提取最新值
-        value = _LAZY_MAPPING[name](CONFIG)
-        
-        # C. 统一转为 Path 对象 (兼容旧逻辑)
-        return Path(value)
-
-    # 如果请求的不是这些常量，抛出标准异常
-    raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
-
-# =============================================================================
-# 7. IDE 智能提示支持 (Type Hinting Stub)
-# =============================================================================
-# 上面的代码运行完美，但 PyCharm/VSCode 会以为 LOG_DIR 不存在而爆红。
-# 下面的代码只在类型检查时运行，不会影响实际逻辑。
-
-if TYPE_CHECKING:
-    LOG_DIR: Path
-    RESOURCES_DIR: Path
-    DATA_RAW_DIR: Path
-    OUTPUT_DIR: Path
-    MAIN_PY_PATH: Path

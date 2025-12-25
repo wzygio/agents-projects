@@ -1,13 +1,7 @@
 # src/setup.py
 import sys, logging, os
-import pandas as pd
-from pathlib import Path
-from datetime import datetime as dt
 from typing import Any 
 from pptx.dml.color import RGBColor 
-from dotenv import load_dotenv
-import streamlit as st # 导入streamlit
-from dateutil.relativedelta import relativedelta
 from packages.ppt_engine.src.utils.local_utils import Utils
 
 class AppSetup:

@@ -9,9 +9,6 @@ from lxml import etree # type: ignore
 from pptx.util import Inches, Pt
 from pptx.dml.color import RGBColor
 from pptx.oxml.xmlchemy import OxmlElement
-from pptx.oxml.ns import qn, nsdecls
-from lxml.etree import Element
-from pptx.enum.text import PP_ALIGN, PP_PARAGRAPH_ALIGNMENT, MSO_VERTICAL_ANCHOR
 
 
 XML_PARSER = etree.XMLParser(remove_blank_text=True, encoding='utf-8')

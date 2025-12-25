@@ -1,13 +1,14 @@
 import pandas as pd
 from pathlib import Path
 import os
-from src.config import config
+from packages.anomaly_monitor.src.config import load_config
 
 class FileAdapter:
     """
     负责底层文件 I/O，实现 CSV -> Parquet 的自动缓存机制
     """
-    def __init__(self, input_dir: Path = Path(config.data_config['input_path']), cache_dir: Path = Path(config.data_config['cache_path'])):
+    def __init__(self, input_dir: Path, cache_dir: Path):
+        self.config = load_config()
         self.input_dir = input_dir
         self.cache_dir = cache_dir
         self.cache_dir.mkdir(parents=True, exist_ok=True)
@@ -16,7 +17,7 @@ class FileAdapter:
         """
         :param file_key: settings.yaml 中 files 下的键名 (如 'hl_raw', 'yield_detail')
         """
-        filename = config.data_config['files'].get(file_key)
+        filename = self.config.data.files.get(file_key)
         if not filename:
             raise ValueError(f"配置中未找到文件键: {file_key}")
 

@@ -135,7 +135,7 @@ class AnomalyMonitorConfig(BaseConfig):
     """
     common: CommonConfig
     data: DataConfig
-    path: PathConfig
+    paths: PathConfig
     daily_report: Optional[DailyReportConfig] = None # [新增] 关联 daily_report
 
     @classmethod

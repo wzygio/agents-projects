@@ -3,8 +3,9 @@ import logging
 import pandas as pd
 import math
 import os 
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional, TYPE_CHECKING
 from datetime import datetime, timedelta
+from pathlib import Path
 
 from pptx.presentation import Presentation as PptxPresentationObject
 from pptx.util import Inches, Pt
@@ -14,25 +15,41 @@ from pptx.enum.text import PP_ALIGN, MSO_VERTICAL_ANCHOR
 from packages.ppt_engine.src.infrastructure.excel_reader import ExcelReader
 from packages.ppt_engine.src.core.element_processor import ElementProcessor
 from packages.ppt_engine.src.core.table_processor import TableProcessor
-from packages.ppt_engine.src.config import DATA_RAW_DIR, RESOURCES_DIR
 from packages.ppt_engine.src.utils.local_utils import Utils
 
-class AnomalyMgmtSectionGenerator:
+# [Standard 4] Import Standard: 使用 TYPE_CHECKING 防止循环依赖
+if TYPE_CHECKING:
+    from packages.ppt_engine.src.config import PptEngineConfig
+
+class AnomalyGenerator:
     """
     负责生成PPT第二章“CT异常闭环管理”相关的所有页面。
     """
-    def __init__(self, prs: PptxPresentationObject, config: dict):
+    def __init__(self, prs: PptxPresentationObject, config: "PptEngineConfig"):
         """
         构造函数，初始化时会加载本章节专属的配置。
+        
+        Args:
+            prs: PPT 演示文稿对象
+            config: 强类型的配置对象 (Dependency Injection)
         """
         self.prs = prs
-        self.config = config # 保存传入的完整配置
-
-        # 从传入的config中，安全地获取本章节的配置字典
-        self.cfg = self.config.get('sections', {}).get('anomaly_management', {})
+        self.config = config 
         
+        # [Standard 3] Type Access (Hybrid Strategy):
+        # 1. 访问 Config 对象下的 sections 属性 (点号访问)
+        # 2. 将特定章节配置转换为字典 (Dict Conversion)，以兼容遗留的 .get() 逻辑
+        section_config_obj = getattr(self.config.sections, 'anomaly_management')
+        
+        if hasattr(section_config_obj, 'model_dump'):
+            self.cfg = section_config_obj.model_dump()
+        elif hasattr(section_config_obj, 'dict'):
+            self.cfg = section_config_obj.dict()
+        else:
+            self.cfg = dict(section_config_obj) if section_config_obj else {}
+
         self.processed_data: Dict[str, Any] = {}
-        logging.info("AnomalyMgmtSectionGenerator 已初始化。")
+        logging.info("AnomalyGenerator 已初始化。")
 
     def generate(self):
         """
@@ -49,14 +66,17 @@ class AnomalyMgmtSectionGenerator:
         """
         logging.info("开始准备第二章所需的数据...")
         try:
-            paths_cfg = self.config.get('paths', {})
-            base_dir = paths_cfg.get('base_dir', '.') # 从配置中获取根目录
-            data_cahce_dir = paths_cfg.get('data_cache_dir', 'data/cache')
+            # [Standard 3] Type Access: 使用点号访问全局路径配置
+            paths = self.config.paths
+            # [Global Purge] 不再依赖全局变量，从 config 提取路径
+            resources_dir = Path(paths.resources_dir)
+            cache_dir = Path(paths.data_cache_dir)
 
-            source_excel_filename = paths_cfg.get('data_source_excel_anomaly')
-            dest_parquet_filename = paths_cfg.get('data_source_parquet_anomaly')
+            source_excel_filename = paths.data_source_excel_anomaly
+            dest_parquet_filename = paths.data_source_parquet_anomaly
             
-            sheet_name = self.cfg.get('sheet_name')
+            # 业务逻辑配置仍使用字典访问 (来自 __init__ 的转换)
+            sheet_name = str(self.cfg.get('sheet_name'))
 
             # 获取当前时间并判断上午/下午
             now = datetime.now()
@@ -68,20 +88,24 @@ class AnomalyMgmtSectionGenerator:
             date_str = self.cfg.get('specific_date') or default_date
             logging.info(f"使用日期: {date_str}")
 
-
             # 检查必要配置是否存在
             if not all([source_excel_filename, dest_parquet_filename, sheet_name, date_str]):
-                missing = [name for name, value in locals().items() if not value and name in ['source_excel_filename', 'dest_parquet_filename', 'sheet_name', 'date_str']]
-                logging.error(f"第二章配置缺失: {', '.join(missing)}")
+                logging.error(f"第二章配置缺失: source={source_excel_filename}, dest={dest_parquet_filename}, sheet={sheet_name}")
                 return
 
-            # 使用os.path.join拼接绝对路径，更健壮
-            source_excel_path = Utils.find_latest_matching_file(RESOURCES_DIR, source_excel_filename)
-            dest_parquet_path = os.path.join(base_dir, data_cahce_dir, dest_parquet_filename)
+            # [Standard 2] Explicit Interface: 显式传入 resources_dir
+            source_excel_path = Utils.find_latest_matching_file(resources_dir, source_excel_filename)
+            
+            # 使用 pathlib 构建路径
+            dest_parquet_path = cache_dir / dest_parquet_filename
+            
+            # 确保父目录存在
+            dest_parquet_path.parent.mkdir(parents=True, exist_ok=True)
             
             # 转换 Excel 到 Parquet
             ExcelReader.convert_to_parquet(str(source_excel_path), sheet_name, str(dest_parquet_path))
             full_df = pd.read_parquet(dest_parquet_path)
+            
             if full_df.empty:
                 raise ValueError("转换后的数据为空，请检查原始数据。")
             
@@ -147,9 +171,19 @@ class AnomalyMgmtSectionGenerator:
         num_slides_to_create = math.ceil(num_data_rows / rows_per_slide)
         logging.info(f"数据共 {num_data_rows} 行，每页 {rows_per_slide} 行，共需生成 {num_slides_to_create} 个新页面。")
         
-        paths_cfg = self.config.get('paths', {})
-        logo_filename = paths_cfg.get('logo')
-        logo_path = os.path.join(DATA_RAW_DIR, logo_filename)
+        # [Standard 3] Type Access & [Global Purge]
+        paths = self.config.paths
+        logo_filename = paths.logo_filename # 假设 Pydantic model 有此字段，或 paths.logo
+        
+        # [Global Purge] 替换 DATA_RAW_DIR，使用 config 定义的路径 (通常 logo 在 resources 或 raw 目录)
+        logo_dir = Path(paths.data_raw_dir)
+        # 检查 logo_filename 是否为 None 或非字符串类型
+        if logo_filename is None:
+            logging.error("logo_filename 为 None，无法构建 logo 路径")
+            logo_path = None
+        else:
+            logo_path = logo_dir / logo_filename
+
 
         for i in range(num_slides_to_create):
             start_idx = i * rows_per_slide
@@ -175,7 +209,6 @@ class AnomalyMgmtSectionGenerator:
     def _standardize_table(df: pd.DataFrame) -> pd.DataFrame:
         """
         [内部静态方法] 接收一个DataFrame，将其指定列的数值转换为百分比字符串。
-        (此逻辑来自您提供的 standardize_table_exception 函数)
         """
         # 1. 创建一个副本进行操作，避免修改原始DataFrame
         processed_df = df.copy()
@@ -246,9 +279,9 @@ class AnomalyMgmtSectionGenerator:
     def _add_table(self, slide, df: pd.DataFrame):
         """
         [新增] 在幻灯片上创建、填充并格式化一个完整的异常管理表格。
-        (此逻辑来自您提供的 add_table_exception 函数)
         """
         # 从配置中获取本表格的布局样式
+        # 这里的 cfg 是在 __init__ 中转换过的字典
         cfg = self.cfg.get('table_layout', {}).get('base', {})
         if not cfg:
             logging.error("未找到表格布局配置，无法创建表格。")

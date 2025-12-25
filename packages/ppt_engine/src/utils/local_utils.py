@@ -6,12 +6,10 @@ import subprocess
 from pathlib import Path
 from zipfile import ZipFile, BadZipFile
 import unicodedata 
-
-from packages.ppt_engine.src.config import LOG_DIR
-
 class Utils:
+    
     @staticmethod
-    def setup_logging(log_filename: str = 'app.log', log_level=logging.INFO):
+    def setup_logging(log_dir: Path, log_filename: str = "app.log", log_level=logging.INFO):
         """
         (已重构) 配置日志系统，实现文件和控制台的双路输出。
         """
@@ -30,7 +28,6 @@ class Utils:
         )
 
         # 4. 创建处理器 1: 写入到文件
-        log_dir = LOG_DIR  # 使用项目根目录下的logs目录
         log_dir.mkdir(parents=True, exist_ok=True)
         log_file_path = log_dir / log_filename
         # 新增：清空现有日志文件

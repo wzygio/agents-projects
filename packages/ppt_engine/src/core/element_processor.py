@@ -1,6 +1,6 @@
 import os
 import logging
-from typing import Dict, Any, List, Tuple, Optional, Union
+from typing import Optional
 
 from pptx.util import Inches, Pt
 from pptx.enum.text import PP_ALIGN

@@ -1,7 +1,8 @@
 import pandas as pd
 import numpy as np
 import logging
-from ....common.infrastructure.hl_data_loader import HLDataLoader
+from infrastructure.loader import HLDataLoader
+from packages.anomaly_monitor.src.config import load_config
 
 logger = logging.getLogger(__name__)
 
@@ -13,7 +14,8 @@ class MWDLDataRepository:
     2. 实现 "MWDL + DefectGroup + Yield" 的三表合一逻辑。
     """
     def __init__(self):
-        self.loader = HLDataLoader()
+        self.config = load_config()
+        self.loader = HLDataLoader(self.config)
 
     def get_processed_mwdl_data(self) -> pd.DataFrame:
         """

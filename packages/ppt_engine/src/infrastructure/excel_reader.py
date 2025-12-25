@@ -8,10 +8,9 @@ from typing import Dict, Any, Optional, Union, List
 
 # 导入openpyxl相关的模块
 from openpyxl import load_workbook
-from functools import singledispatch
 from openpyxl.worksheet.worksheet import Worksheet
 from openpyxl.utils import get_column_letter
-from openpyxl.utils.cell import column_index_from_string, range_boundaries
+from openpyxl.utils.cell import range_boundaries
 
 class ExcelReader:
     """
