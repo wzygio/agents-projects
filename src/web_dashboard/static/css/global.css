@@ -1,0 +1,31 @@
+/* src/web_dashboard/static/css/globals.css */
+
+/* 全局重置 */
+body { 
+    background-color: #fafafa; 
+    color: #0f172a; 
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI", Roboto, sans-serif;
+    margin: 0;
+    padding: 0;
+    height: 100vh;
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased; 
+}
+
+/* 布局骨架 */
+.main-layout { display: flex; height: 100%; max-width: 1920px; margin: 0 auto; }
+
+/* 文本选区 */
+::selection { background-color: #e0e7ff; color: #3730a3; }
+
+/* 动画关键帧 */
+@keyframes capsule-slide-in { to { opacity: 1; transform: translateX(0); } }
+@keyframes pulse-subtle { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
+
+.animate-pulse-subtle { animation: pulse-subtle 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+
+/* 自定义滚动条 */
+.custom-scrollbar::-webkit-scrollbar { width: 6px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: #404040; border-radius: 3px; }
+.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #555; }

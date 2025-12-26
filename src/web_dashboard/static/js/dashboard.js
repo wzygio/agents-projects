@@ -1,221 +1,42 @@
 // src/web_dashboard/static/js/dashboard.js
-const { useState, useEffect, useRef, useMemo } = React;
-
-const Icon = ({ name, size = 20, className = "" }) => {
-    const iconContainerRef = useRef(null);
-    useEffect(() => {
-        if (!iconContainerRef.current || !window.lucide) return;
-        iconContainerRef.current.innerHTML = '';
-        const tempIcon = document.createElement('i');
-        tempIcon.setAttribute('data-lucide', name);
-        iconContainerRef.current.appendChild(tempIcon);
-        window.lucide.createIcons({
-            root: iconContainerRef.current,
-            nameAttr: 'data-lucide',
-            attrs: { class: className, width: size, height: size }
-        });
-    }, [name, size, className]);
-    return <span ref={iconContainerRef} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }} />;
-};
-
-const ArtifactCapsule = ({ result }) => {
-    if (!result) return null;
-    const isFile = result.type === 'file';
-    const iconName = isFile ? 'download' : 'external-link';
-    const className = `artifact-capsule type-${result.type}`;
-    return (
-        <a href={result.url} target="_blank" className={className} onClick={(e) => e.stopPropagation()}>
-            <span className="capsule-icon-wrapper"><Icon name={iconName} size={14} /></span>
-            <span>{result.label}</span>
-        </a>
-    );
-};
-
-const TASK_STRUCTURE = {
-    monitor: {
-        title: "异常监控",
-        nodes: [
-            // 1. 数据基础设施
-            { 
-                type: 'group', 
-                name: "数据获取与预处理", 
-                subSteps: [
-                    "Spotfire数据导出", // Infrastructure: Hybrid方案
-                    "数据清洗与预处理"      // Infrastructure: Web CrawlerRepository: HL + Yield + History
-                ]
-            },
-            // 2. 核心算法层
-            { 
-                type: 'group', 
-                name: "真实异常识别", 
-                subSteps: [
-                    "L1: 基础筛选",      // Detector: Threshold
-                    "L2: 历史批次分析",  // Detector: Relative Worsening
-                    "L3: 集中性分析"     // Analyzer: Concentration Logic
-                ]
-            },
-            // 3. AI 大脑层 (新增)
-            { 
-                type: 'single', 
-                name: "控制台启动" // Brain: 良率分析师 Agent
-            },
-            // 4. 交付层
-            { 
-                type: 'group', 
-                name: "闭环处置流程", 
-                subSteps: [
-                    "生成 HL 通报摘要",      // Generator: Summary
-                    "写入HL记录表",      // Repository: Save
-                    "更新异常管理表",      // Repository: Update List
-                    "EM通知责任人"         // Utils: Notification
-                ]
-            }
-        ]
-    },
-    daily_report: {
-        title: "日报生成",
-        nodes: [
-            // 1. 基础设施层：RPA 抓取
-            { 
-                type: 'group', 
-                name: "数据获取与预处理", 
-                subSteps: [
-                    "Playwright报表下载",  // Infra: Web Crawler
-                    "数据清洗与预处理"      // Infra: Data Cleaning
-                ]
-            },
-            // 2. 核心层：Excel 计算引擎
-            { 
-                type: 'group', 
-                name: "Excel日报内容生成", 
-                subSteps: [
-                    "各产品当日数据汇总", // Config: YAML Loader
-                    "各产品当日异常报告"  // Core: Exception Processor
-                ]
-            },
-            // 3. 核心层：PPT 渲染引擎
-            { 
-                type: 'group', 
-                name: "PPT日报生成", 
-                subSteps: [
-                    "画布预处理 (Canvas Prep)",  // Core: Canvas Preprocessor
-                    "数据注入与图表渲染"         // Core: Table Renderer
-                ]
-            },
-            // 4. 应用层：AI + 交付
-            { 
-                type: 'group', 
-                name: "日报分发与归档", 
-                subSteps: [
-                    "日报推送 (Email)",    // App: Distribution
-                    "EM通知群推送",    // App: Distribution
-                    "归档至公盘 (Archive)"       // Utils: File Copy
-                ]
-            }
-        ]
-    }
-};
-
-const INITIAL_MODULE_STATE = {
-    isRunning: false,
-    currentStepId: 0,
-    logs: [],
-    results: {},
-    expandedGroups: new Set()
-};
+const { useState, useEffect } = React;
 
 function App() {
-    const [activeTab, setActiveTab] = useState('monitor');
-    const [terminalState, setTerminalState] = useState('normal');
+    const [runMode, setRunMode] = useState('human');
+    const [isGlobalRunning, setIsGlobalRunning] = useState(false);
+    const [focusedStepId, setFocusedStepId] = useState(1);
     
-    // 多模块独立状态
-    const [moduleStates, setModuleStates] = useState({
-        monitor: { ...INITIAL_MODULE_STATE, logs: [], results: {}, expandedGroups: new Set() },
-        daily_report: { ...INITIAL_MODULE_STATE, logs: [], results: {}, expandedGroups: new Set() }
+    // 初始化状态
+    const [stepStates, setStepStates] = useState(() => {
+        const initial = {};
+        window.PIPELINE_STEPS.forEach(step => initial[step.id] = { status: 'idle', logs: [], result: null });
+        return initial;
     });
 
-    const logsEndRef = useRef(null);
-    const currentData = moduleStates[activeTab];
-
-    const processedNodes = useMemo(() => {
-        const rawNodes = TASK_STRUCTURE[activeTab].nodes;
-        let counter = 1;
-        return rawNodes.map(node => {
-            if (node.type === 'single') {
-                const id = counter++;
-                return { ...node, startId: id, endId: id };
-            } else {
-                const start = counter;
-                const end = counter + node.subSteps.length - 1;
-                counter += node.subSteps.length;
-                return { ...node, startId: start, endId: end };
-            }
-        });
-    }, [activeTab]);
-
-    const updateModule = (tabName, updater) => {
-        setModuleStates(prev => ({
-            ...prev,
-            [tabName]: updater(prev[tabName])
-        }));
+    const updateStepState = (id, updater) => {
+        setStepStates(prev => ({ ...prev, [id]: updater(prev[id]) }));
     };
 
-    useEffect(() => {
-        logsEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    }, [currentData.logs]);
-
-    // 自动折叠逻辑
-    useEffect(() => {
-        const { isRunning, currentStepId } = currentData;
-        if (!isRunning && currentStepId === 0) return;
-
-        updateModule(activeTab, (prev) => {
-            const newSet = new Set(prev.expandedGroups);
-            let hasChanged = false;
-            processedNodes.forEach(node => {
-                if (node.type === 'group') {
-                    const isActive = currentStepId >= node.startId && currentStepId <= node.endId;
-                    const isCompleted = currentStepId > node.endId || currentStepId === 100;
-                    if (isActive && !newSet.has(node.startId)) {
-                        newSet.add(node.startId);
-                        hasChanged = true;
-                    }
-                    if (isCompleted && !isActive && newSet.has(node.startId)) {
-                        newSet.delete(node.startId);
-                        hasChanged = true;
-                    }
-                }
+    // 核心业务逻辑 (Fetch)
+    const runTask = async (targetStepId = null) => {
+        if (targetStepId === null) {
+            setIsGlobalRunning(true);
+            setStepStates(prev => {
+                const next = { ...prev };
+                Object.keys(next).forEach(k => next[k] = { status: 'idle', logs: [], result: null });
+                return next;
             });
-            return hasChanged ? { ...prev, expandedGroups: newSet } : prev;
-        });
-    }, [currentData.currentStepId, currentData.isRunning, activeTab, processedNodes]);
+            setFocusedStepId(1);
+        } else {
+            updateStepState(targetStepId, () => ({ status: 'running', logs: [], result: null }));
+            setFocusedStepId(targetStepId);
+        }
 
-    const toggleGroup = (startId) => {
-        updateModule(activeTab, (prev) => {
-            const newSet = new Set(prev.expandedGroups);
-            if (newSet.has(startId)) newSet.delete(startId);
-            else newSet.add(startId);
-            return { ...prev, expandedGroups: newSet };
-        });
-    };
-
-    // 启动流程
-    const startProcess = async (targetTab) => {
-        // 1. 初始化状态
-        updateModule(targetTab, () => ({
-            isRunning: true,
-            currentStepId: 0,
-            logs: [],
-            results: {},
-            expandedGroups: new Set()
-        }));
-
-        if (terminalState === 'minimized') setTerminalState('normal');
-        
         try {
-            // 【核心修复】添加时间戳参数 ?t=... 
-            // 这强制浏览器将此视为一个新的独立请求，不再排队，从而实现真正的并行
-            const response = await fetch(`/start/${targetTab}?t=${Date.now()}`);
+            let url = `/start/automated_duty_system?mode=${runMode}`;
+            if (targetStepId !== null) url += `&step_id=${targetStepId}`;
+
+            const response = await fetch(url);
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
 
@@ -223,187 +44,82 @@ function App() {
                 const { value, done } = await reader.read();
                 if (done) break;
                 const lines = decoder.decode(value).split('\n');
-                
                 for (const line of lines) {
                     if (!line.trim()) continue;
                     try {
                         const data = JSON.parse(line);
-                        
-                        updateModule(targetTab, (prev) => {
-                            let nextState = { ...prev };
-                            if (data.status === 'done') {
-                                nextState.isRunning = false;
-                                nextState.currentStepId = 100;
-                            } else {
-                                if (data.log) nextState.logs = [...prev.logs, data.log];
-                                if (data.status === 'running') nextState.currentStepId = data.step_id;
-                                if (data.result && data.step_id) nextState.results = { ...prev.results, [data.step_id]: data.result };
+                        if (data.status === 'done') continue;
+                        if (data.step_id) {
+                            const sId = data.step_id;
+                            if (targetStepId === null && data.status === 'running') {
+                                setFocusedStepId(curr => (curr !== sId ? sId : curr));
                             }
-                            return nextState;
-                        });
+                            updateStepState(sId, (prev) => {
+                                let newState = { ...prev };
+                                if (['running', 'completed', 'error', 'waiting_input'].includes(data.status)) {
+                                     newState.status = data.status === 'waiting_input' ? 'waiting' : data.status;
+                                }
+                                if (data.log) newState.logs = [...prev.logs, data.log];
+                                if (data.result) newState.result = data.result;
+                                return newState;
+                            });
+                        }
                     } catch (e) { console.error(e); }
                 }
             }
-        } catch (error) {
-            console.error(error);
-            updateModule(targetTab, (prev) => ({ ...prev, isRunning: false, logs: [...prev.logs, "ERROR: Connection failed"] }));
+        } catch (err) { console.error(err); } 
+        finally {
+            setIsGlobalRunning(false);
+            if (targetStepId !== null) updateStepState(targetStepId, s => ({...s, status: s.status === 'running' ? 'error' : s.status}));
         }
     };
 
-    const handleClose = (e) => { e.stopPropagation(); updateModule(activeTab, (prev) => ({ ...prev, logs: [] })); };
-    const handleMinimize = (e) => { e.stopPropagation(); setTerminalState(prev => prev === 'minimized' ? 'normal' : 'minimized'); };
-    const handleMaximize = (e) => { e.stopPropagation(); setTerminalState(prev => prev === 'maximized' ? 'normal' : 'maximized'); };
-
     return (
-        <div className="main-layout font-sans">
+        <div className="main-layout font-sans bg-[#fafafa]">
+            {/* 侧边栏 (静态) */}
             <div className="sidebar">
                 <div className="mb-10 px-2 mt-2">
                     <div className="h-10 w-10 bg-black rounded-full flex items-center justify-center text-white mb-4 shadow-xl shadow-black/20">
-                        <Icon name="aperture" size={24} className="text-white" />
+                        <window.Icon name="aperture" size={24} className="text-white" />
                     </div>
                     <h1 className="text-xl font-extrabold tracking-tight text-black">值班自动化系统</h1>
                     <p className="text-xs font-bold text-slate-400 mt-1 tracking-widest uppercase">PIE - 大数据科</p>
                 </div>
-                
                 <div className="flex-1 space-y-2">
-                    {Object.keys(TASK_STRUCTURE).map(key => {
-                        const state = moduleStates[key];
-                        return (
-                            <div key={key} onClick={() => setActiveTab(key)} className={`nav-item ${activeTab === key ? 'active' : ''}`}>
-                                <Icon name={key === 'monitor' ? 'activity' : 'file-bar-chart-2'} size={18} />
-                                <span className="flex-1">{key === 'monitor' ? '异常监控' : '日报生成'}</span>
-                                
-                                {/* 【新增】侧边栏状态指示器：让并行状态可视化 */}
-                                {state.isRunning ? (
-                                    <div className="flex items-center gap-1.5 px-2 py-0.5 bg-green-100 rounded-full border border-green-200">
-                                        <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></div>
-                                        <span className="text-[10px] font-bold text-green-700">RUNNING</span>
-                                    </div>
-                                ) : state.currentStepId === 100 ? (
-                                    <div className="px-2 py-0.5 bg-slate-100 rounded-full border border-slate-200">
-                                        <span className="text-[10px] font-bold text-slate-500">DONE</span>
-                                    </div>
-                                ) : null}
-                            </div>
-                        );
-                    })}
+                    <div className="nav-item active">
+                        <window.Icon name="layers" size={18} />
+                        <span className="flex-1">自动化流水线</span>
+                        {isGlobalRunning && <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>}
+                    </div>
                 </div>
             </div>
 
+            {/* 主内容 */}
             <div className="flex-1 flex flex-col p-10 bg-[#fafafa]">
-                <div className="flex justify-between items-end mb-10 pb-6 border-b border-slate-200">
-                    <div>
-                        <h2 className="text-4xl font-black text-black tracking-tight mb-2">{TASK_STRUCTURE[activeTab].title}</h2>
-                        <p className="text-slate-600 font-medium">自动化解决方案 · 混合RPA架构 · AI Agent辅助分析</p>
-                    </div>
-                    <button 
-                        onClick={() => startProcess(activeTab)} 
-                        disabled={currentData.isRunning} 
-                        className={`px-8 py-3 rounded-full font-bold text-sm transition-all flex items-center gap-2 ${currentData.isRunning ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-black text-white hover:scale-105 hover:shadow-xl shadow-black/10'}`}
-                    >
-                        {currentData.isRunning ? <Icon name="loader-2" className="animate-spin text-slate-400" size={16} /> : <Icon name="play" className="text-white fill-current" size={16} />}
-                        {currentData.isRunning ? 'Running...' : 'Start Pipeline'}
-                    </button>
-                </div>
+                {/* 1. Header 组件 */}
+                <window.Header 
+                    runMode={runMode} 
+                    setRunMode={setRunMode} 
+                    isGlobalRunning={isGlobalRunning} 
+                    runTask={runTask} 
+                />
 
                 <div className="flex-1 flex gap-16 overflow-hidden">
-                    <div className="w-[560px] overflow-y-auto step-list pb-20 no-scrollbar relative">
-                        {processedNodes.map((node, index) => {
-                            const isGroup = node.type === 'group';
-                            const stepId = currentData.currentStepId;
-                            const isNodeCompleted = stepId > node.endId || stepId === 100;
-                            const isNodeActive = !isNodeCompleted && (stepId >= node.startId && stepId <= node.endId);
-                            const isExpanded = currentData.expandedGroups.has(node.startId);
-                            let rowClass = "";
-                            if (isNodeActive) rowClass = "active";
-                            if (isNodeCompleted) rowClass = "completed";
+                    {/* 2. StepList 组件 */}
+                    <window.StepList 
+                        stepStates={stepStates}
+                        focusedStepId={focusedStepId}
+                        setFocusedStepId={setFocusedStepId}
+                        runMode={runMode}
+                        isGlobalRunning={isGlobalRunning}
+                        runTask={runTask}
+                    />
 
-                            return (
-                                <div key={index} className={`node-wrapper ${rowClass}`}>
-                                    <div className={`node-row ${isGroup ? 'cursor-pointer' : ''}`} onClick={() => isGroup && toggleGroup(node.startId)}>
-                                        <div className="icon-circle">
-                                            {isNodeCompleted ? <Icon name="check" size={22} /> : isNodeActive ? <Icon name={isGroup ? "layers" : "loader-2"} className={!isGroup ? "animate-spin" : ""} size={22} /> : <span className="text-xs font-bold">{node.startId}</span>}
-                                        </div>
-                                        <div className="spatial-card">
-                                            <div className="flex flex-col">
-                                                <div className="card-title text-base font-semibold flex items-center gap-2">
-                                                    {node.name}
-                                                    {isGroup && <Icon name="chevron-down" size={16} className={`text-slate-400 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} />}
-                                                </div>
-                                                {isGroup && isNodeActive && <div className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded-full w-fit mt-1">Running</div>}
-                                            </div>
-                                            <ArtifactCapsule result={currentData.results[node.startId]} />
-                                        </div>
-                                    </div>
-                                    {isGroup && (
-                                        <div className={`sub-group-container ${isExpanded ? 'expanded' : ''}`}>
-                                            <div className="sub-group-inner">
-                                                {node.subSteps.map((subStepName, subIndex) => {
-                                                    const realSubId = node.startId + subIndex;
-                                                    const isSubCompleted = stepId > realSubId || stepId === 100;
-                                                    const isSubActive = stepId === realSubId;
-                                                    return (
-                                                        <div key={subIndex} className={`sub-node-row ${isSubActive ? 'active' : ''} ${isSubCompleted ? 'completed' : ''}`} style={{transitionDelay: `${subIndex * 50}ms`}}>
-                                                            <div className="branch-curve"></div>
-                                                            <div className="sub-icon-circle">
-                                                                {isSubActive ? <Icon name="loader-2" className="animate-spin" size={14} /> : isSubCompleted ? <Icon name="check" size={14} /> : <div className="w-1.5 h-1.5 rounded-full bg-slate-300"></div>}
-                                                            </div>
-                                                            <div className="sub-card">
-                                                                <div className="flex flex-col">
-                                                                    <span className="font-medium">{subStepName}</span>
-                                                                    {isSubActive && <span className="text-xs text-blue-600 font-bold">Processing</span>}
-                                                                </div>
-                                                                <ArtifactCapsule result={currentData.results[realSubId]} />
-                                                            </div>
-                                                        </div>
-                                                    )
-                                                })}
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                            );
-                        })}
-                        <div className={`node-wrapper ${currentData.currentStepId === 100 ? 'completed' : ''}`} style={{opacity: currentData.currentStepId === 100 ? 1 : 0.4, filter: currentData.currentStepId === 100 ? 'none' : 'grayscale(100%)', transition: 'all 0.5s ease'}}>
-                            <div className="node-row">
-                                <div className="icon-circle" style={{borderColor: currentData.currentStepId === 100 ? '#10b981' : '#e2e8f0', color: currentData.currentStepId === 100 ? '#10b981' : '#cbd5e1', backgroundColor: currentData.currentStepId === 100 ? '#ecfdf5' : '#f8fafc'}}>
-                                    <Icon name="flag" size={22} className={currentData.currentStepId === 100 ? "fill-current" : ""} />
-                                </div>
-                                <div className="spatial-card" style={{border: 'none', background: 'transparent', boxShadow: 'none', paddingLeft: 0}}>
-                                    <div className="text-sm font-bold text-slate-400 uppercase tracking-wider">
-                                        {currentData.currentStepId === 100 ? "Workflow Completed" : "End"}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="flex-1 pb-10 flex flex-col relative">
-                        <div className={`terminal-wrapper ${terminalState}`}>
-                            <div className="terminal-header" onDoubleClick={handleMaximize}>
-                                <div className="window-dots">
-                                    <div className="mac-btn btn-red" onClick={handleClose}></div>
-                                    <div className="mac-btn btn-yellow" onClick={handleMinimize}></div>
-                                    <div className="mac-btn btn-green" onClick={handleMaximize}></div>
-                                </div>
-                                <div className="ml-4 text-xs text-zinc-500 font-mono font-bold flex-1 text-center pr-12 truncate">
-                                    {/* 【新增】日志标题明确指出当前是哪个模块 */}
-                                    agent_runner — {TASK_STRUCTURE[activeTab].title}
-                                </div>
-                            </div>
-                            <div className="terminal-body">
-                                {currentData.logs.length === 0 && <div className="text-zinc-600 select-none font-medium">$ system ready.<br/>$ awaiting instructions for {activeTab}...<br/><span className="animate-pulse">_</span></div>}
-                                {currentData.logs.map((log, i) => {
-                                    let style = "text-zinc-400"; 
-                                    if (log.includes("EXEC:")) style = "text-blue-400 font-bold";
-                                    else if (log.includes("OK:")) style = "text-emerald-400 font-bold";
-                                    else if (log.includes("info")) style = "text-zinc-500 italic font-medium";
-                                    return <div key={i} className={`mb-1 break-words ${style} font-mono text-sm`}>{!log.includes("info") && <span className="text-zinc-600 mr-2">$</span>}{log}</div>
-                                })}
-                                <div ref={logsEndRef} />
-                            </div>
-                        </div>
-                    </div>
+                    {/* 3. Terminal 组件 */}
+                    <window.Terminal 
+                        stepStates={stepStates}
+                        focusedStepId={focusedStepId}
+                    />
                 </div>
             </div>
         </div>

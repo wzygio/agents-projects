@@ -1,0 +1,45 @@
+/* src/web_dashboard/static/css/components.css */
+
+/* 空间感卡片 */
+.spatial-card {
+    flex: 1;
+    background: #ffffff;
+    border-radius: 16px;
+    padding: 16px 24px;
+    border: 1px solid rgba(0,0,0,0.04); 
+    transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+    display: flex;
+    align-items: center;
+    justify-content: space-between; 
+}
+
+.node-wrapper.active .spatial-card {
+    transform: translateY(-2px);
+    box-shadow: 0 15px 30px -5px rgba(0, 0, 0, 0.08);
+    border-color: #cbd5e1;
+}
+.node-wrapper.completed .spatial-card { opacity: 0.9; }
+
+.card-title { font-weight: 700; color: #0f172a; }
+.node-wrapper.completed .card-title { color: #64748b; }
+
+/* 智能胶囊 */
+.artifact-capsule {
+    display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 20px; 
+    font-size: 0.8rem; font-weight: 600; text-decoration: none; 
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+    opacity: 0; transform: translateX(-10px);
+    animation: capsule-slide-in 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.artifact-capsule:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+}
+
+.artifact-capsule.type-file { background: #f0f9ff; border: 1px solid #e0f2fe; color: #0284c7; }
+.artifact-capsule.type-file:hover { background: #e0f2fe; color: #0369a1; transform: translateY(-2px); }
+
+.artifact-capsule.type-link { background: #f5f3ff; border: 1px solid #ede9fe; color: #7c3aed; }
+.artifact-capsule.type-link:hover { background: #ede9fe; color: #6d28d9; transform: translateY(-2px); }

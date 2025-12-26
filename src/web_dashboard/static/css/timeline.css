@@ -1,0 +1,68 @@
+/* src/web_dashboard/static/css/timeline.css */
+
+.step-list {
+    padding-right: 20px;
+    padding-left: 20px;
+    padding-bottom: 100px;
+    position: relative;
+}
+
+.node-wrapper {
+    position: relative;
+    margin-bottom: 24px;
+    z-index: 1;
+}
+
+/* 核心连线逻辑 */
+.node-wrapper::before {
+    content: '';
+    position: absolute;
+    left: 19px; 
+    width: 2px;
+    background-color: #e2e8f0;
+    z-index: 0;
+    top: 20px; 
+    bottom: -24px;
+    transition: background-color 0.4s;
+}
+.node-wrapper:last-child::before { top: 0; bottom: auto; height: 20px; }
+.node-wrapper.completed::before { background-color: #0f172a; }
+.node-wrapper:last-child.completed::before { background-color: #10b981; }
+
+.node-row {
+    position: relative;
+    display: flex;
+    gap: 20px; 
+    align-items: center;
+}
+
+/* 状态图标圆圈 */
+.icon-circle {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #f8fafc;
+    color: #94a3b8;
+    border: 2px solid #ffffff; 
+    box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+    transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+    z-index: 2; 
+    flex-shrink: 0;
+}
+
+/* 状态变化 */
+.node-wrapper.active .icon-circle {
+    background: #0f172a; 
+    color: #ffffff;
+    transform: scale(1.15); 
+    box-shadow: 0 0 0 4px rgba(15, 23, 42, 0.15);
+    border-color: #0f172a;
+}
+.node-wrapper.completed .icon-circle { 
+    background: #ffffff; 
+    color: #10b981; 
+    border-color: #10b981; 
+}
