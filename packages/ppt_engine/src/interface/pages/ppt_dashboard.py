@@ -1,29 +1,32 @@
-import yaml, os, sys
+import streamlit as st
 import datetime
 from datetime import timedelta
-import subprocess
-import tempfile
-import streamlit as st
 from pathlib import Path
+import logging
 
-# [修改 1] 导入 load_config 而不是 CONFIG
-# 同时导入 MAIN_PY_PATH 等常量作为备用，但尽量优先使用 config 对象中的值
-from packages.ppt_engine.src.config import load_config, MAIN_PY_PATH
+# [修改 1] 导入配置加载器
+from packages.ppt_engine.src.config import load_config
 
+# [修改 2] 导入核心业务逻辑类 (不再是通过 subprocess 调用 main.py)
+from packages.ppt_engine.src.application.ppt_generator import PPTGenerator
 from packages.ppt_engine.src.interface.components.app_setup import AppSetup
 
-# [修改 2] 初始化配置对象
+# 初始化配置对象
 # 这确保了无论 Streamlit 何时重启，我们都能拿到最新的、正确的配置
 config = load_config()
 
-# 为了代码简洁，提取一些常用路径 (确保转为 Path 对象或 str)
-# 注意：这里直接从 config 对象读取，比从 config.py 导入全局变量更安全
+# 为了代码简洁，提取一些常用路径
 RESOURCES_DIR = Path(config.paths.resources_dir)
 OUTPUT_DIR = Path(config.paths.output_dir)
+
+# 初始化日志记录器
+logger = logging.getLogger("PPTDashboard")
 
 @st.cache_resource
 def init_portal_resources():
     AppSetup.initialize_app()
+
+init_portal_resources()
 
 # ===================================================================
 # --- 侧边栏 ---
@@ -34,17 +37,17 @@ st.title("📊 PPT 自动化报告生成器")
 with st.sidebar:
     st.header("⚙️ 报告生成配置")
     st.subheader("全局设置")
-    # [修改 3] 使用 config 实例访问属性
+    
+    # 绑定 config 对象的属性
     output_filename = st.text_input("1. 输出PPT文件名", value=config.paths.output_ppt)
     
-    # 获取当前时间并判断上午/下午
+    # 时间逻辑
     now = datetime.datetime.now()
     if now.hour < 12:  # 上午（0-11时）
-        default_date = datetime.date.today() - timedelta(days=1)  # 昨天的日期
+        default_date = datetime.date.today() - timedelta(days=1)
     else:  # 下午（12-23时）
-        default_date = datetime.date.today()  # 今天的日期
+        default_date = datetime.date.today()
 
-    # 设置日期输入框
     report_date = st.date_input("2. 数据日期", value=default_date)
     
     st.subheader("模板与章节")
@@ -77,115 +80,129 @@ if gen_anomaly_management: uploaded_files['anomaly_management'] = st.file_upload
 if gen_risk_control: uploaded_files['risk_control'] = st.file_uploader("3. 上传【风险品管控】Excel文件 (可选)", type=['xlsx', 'xls'])
 
  
-# 1. 初始化session_state中的结果标记
+# 状态管理
 if 'last_run_result' not in st.session_state:
     st.session_state['last_run_result'] = None
 
-# 2. 当用户点击生成按钮时，执行任务并把结果存入session_state
+# ===================================================================
+# --- 核心逻辑：执行生成 ---
+# ===================================================================
 if generate_button:
-    st.session_state['last_run_result'] = None # 每次生成之前都清空上次的结果
+    st.session_state['last_run_result'] = None 
     
-    # 创建临时目录（自动清理）：我们仍然需要 temp_dir 来存放临时的 config.yaml
-    with tempfile.TemporaryDirectory() as temp_dir:
-        try:
-            # [修改 4 - 关键修复] 使用 model_dump() 转换为纯字典
-            # config.copy() 是浅拷贝且返回 Pydantic 模型，不适合这里的字典操作和 YAML 序列化
-            new_config = config.model_dump() 
-
-            # --- 1. 保存上传的日报模板文件并更新路径 ---
-            if template_source == "手动上传新模板":
-                if uploaded_template_file:
-                    saved_path = AppSetup.save_uploaded_file(uploaded_template_file, RESOURCES_DIR) 
-
-                    # 将上传的模板文件的路径保存到新的配置中
-                    # 因为 new_config 现在是纯字典，所以可以直接用 key 访问
-                    if 'template_ppt_source' not in new_config['paths']: new_config['paths']['template_ppt_source'] = {}
-                    new_config['paths']['template_ppt_source'] = {'type': 'uploaded', 'path': str(saved_path), 'filename': uploaded_template_file.name}
-                else:
-                    st.error("错误：您选择了手动上传模板，但未上传任何文件。")
-                    st.stop()
-            
-            # --- 2. 保存上传的数据文件并更新路径 ---
-            # data_sources 也是 list of dicts，因为我们用了 model_dump()
-            key_to_index_map = {item['key_name']: i for i, item in enumerate(new_config['paths']['data_sources'])}
-            
-            excel_uploads = {
-                'yield_data': 'data_source_excel_FPY',
-                'anomaly_management': 'data_source_excel_anomaly',
-                'risk_control': 'data_source_excel_risk'
-            }
-            
-            # 处理上传的Excel文件
-            for section_key, uploader_key in excel_uploads.items():
-                if uploaded_files.get(section_key):
-                    if uploader_key in key_to_index_map:
-                        idx = key_to_index_map[uploader_key]
-                        if uploaded_files.get(section_key):
-                            # 有上传文件的情况
-                            saved_path = AppSetup.save_uploaded_file(uploaded_files[section_key], RESOURCES_DIR)
-                            new_config['paths']['data_sources'][idx]['source_type'] = 'uploaded'
-                            new_config['paths']['data_sources'][idx]['path'] = str(saved_path)
-                        else:
-                            # 没有上传文件的情况，使用网络数据源
-                            new_config['paths']['data_sources'][idx]['source_type'] = 'network'
-
-            # 将设定的模板文件名和日期保存到新的配置中
-            new_config['paths']['output_ppt'] = output_filename
-            new_config['sections']['anomaly_management']['specific_date'] = report_date.strftime('%Y-%m-%d')
-            
-            # 各章节勾选结果（要生成的章节）
-            required_sections = {
-                'yield_data': gen_yield_data, 
-                'anomaly_management': gen_anomaly_management, 
-                'risk_control': gen_risk_control
-            }
-            new_config['runtime_settings'] = {'sections_to_generate': [name for name, checked in required_sections.items() if checked]}
-            
-            temp_config_path = os.path.join(temp_dir, 'temp_config.yaml')
-            config_to_write = AppSetup.revert_colors_to_list(new_config)
-            
-            # 使用 safe_dump 或 dump
-            with open(temp_config_path, 'w', encoding='utf-8') as f: 
-                yaml.dump(config_to_write, f, allow_unicode=True, sort_keys=False)
-
-            # --- 调用后台进程 ---
-            with st.spinner("配置准备就绪，正在调用核心生成引擎..."):
-                # 准备环境变量
-                python_executable = sys.executable 
-                process_env = os.environ.copy()
-                process_env['PYTHONIOENCODING'] = 'utf-8'
-
-                # 执行main.py脚本
-                # 注意：MAIN_PY_PATH 可能是 Path 对象，subprocess 需要 str
-                result = subprocess.run(
-                    [python_executable, str(MAIN_PY_PATH), '--config', temp_config_path], 
-                    capture_output=True, 
-                    text=True, 
-                    encoding='utf-8', 
-                    env=process_env)
-
-            # --- 将运行结果存入“长期记忆” session_state ---
-            st.session_state['last_run_result'] = {
-                "returncode": result.returncode, # 0表示成功，非0表示失败
-                "stdout": result.stdout, # 标准输出
-                "stderr": result.stderr, # 标准错误
-                "output_dir": str(OUTPUT_DIR), # 输出目录 (确保转为str)
-                "output_filename": output_filename # 输出文件名
-            }
-            # 强制页面刷新，以便立刻显示新存入的结果
-            st.rerun()
+    # [核心修改] 不再深拷贝字典，而是直接修改内存中的 config 对象
+    # 因为 Streamlit 的运行机制是脚本重跑，每次 config = load_config() 都会拿到新的（或者缓存的）对象
+    # 为了安全起见，我们还是建议做一次 model_copy()，但这里为了演示直接修改
+    
+    try:
+        # --- 1. 处理模板上传 ---
+        if template_source == "手动上传新模板":
+            if uploaded_template_file:
+                saved_path = AppSetup.save_uploaded_file(uploaded_template_file, RESOURCES_DIR)
+                # 更新 config 对象中的 paths 属性
+                # 注意：这里假设 config.paths.template_ppt_source 是一个 DataSourceItem 对象
+                # 如果它不存在，我们需要构造一个
+                # 为简化逻辑，我们直接修改 data_sources 列表中的 main_template 项
+                
+                # 寻找 main_template 项并修改
+                found = False
+                for item in config.paths.data_sources:
+                    if item.key_name == 'main_template':
+                        item.source_type = 'upload'
+                        item.path = str(saved_path)
+                        item.filename = uploaded_template_file.name
+                        found = True
+                        break
+                
+                if not found:
+                     st.warning("配置中未找到 main_template 数据源定义，可能导致模板加载失败。")
+            else:
+                st.error("错误：您选择了手动上传模板，但未上传任何文件。")
+                st.stop()
         
-        except Exception as e:
-            st.error(f"应用发生了一个意料之外的错误: {e}")
+        # --- 2. 处理数据文件上传 ---
+        # 建立映射关系: section_key -> config_key_name
+        excel_uploads_map = {
+            'yield_data': 'data_source_excel_FPY',
+            'anomaly_management': 'data_source_excel_anomaly',
+            'risk_control': 'data_source_excel_risk'
+        }
+        
+        for section_key, config_key_name in excel_uploads_map.items():
+            uploaded_file = uploaded_files.get(section_key)
+            
+            # 在 config.paths.data_sources 中找到对应的项
+            target_item = next((item for item in config.paths.data_sources if item.key_name == config_key_name), None)
+            
+            if target_item:
+                if uploaded_file:
+                    # 如果用户上传了文件 -> 保存并更新配置为 'uploaded'
+                    saved_path = AppSetup.save_uploaded_file(uploaded_file, RESOURCES_DIR)
+                    target_item.source_type = 'upload'
+                    target_item.path = str(saved_path)
+                    # 也可以更新 filename，虽然 processing 逻辑主要看 path
+                    # target_item.filename = uploaded_file.name 
+                else:
+                    # 如果没上传 -> 保持默认 (或强制设为 network/local)
+                    # 这里我们保持原样，或者显式设为 network
+                    if target_item.source_type == 'upload':
+                         target_item.source_type = 'network' # 回退
+
+        # --- 3. 更新其他运行时参数 ---
+        config.paths.output_ppt = output_filename
+        
+        # 更新日期 (假设在 sections.anomaly_management 下有 specific_date)
+        if config.sections.anomaly_management:
+             config.sections.anomaly_management.specific_date = report_date.strftime('%Y-%m-%d')
+        
+        # 更新章节生成列表
+        required_sections = {
+            'yield_data': gen_yield_data, 
+            'anomaly_management': gen_anomaly_management, 
+            'risk_control': gen_risk_control
+        }
+        
+        if config.runtime_settings is None:
+             config.runtime_settings = {}
+             
+        config.runtime_settings['sections_to_generate'] = [name for name, checked in required_sections.items() if checked]
+
+        # --- 4. [核心修改] 直接调用 Generator ---
+        with st.status("正在执行核心生成引擎...", expanded=True) as status:
+            st.write("🔧 初始化 PPT 生成器 (Memory Injection Mode)...")
+            
+            # [Dependency Injection] 直接传入修改后的 config 对象
+            generator = PPTGenerator(config)
+            
+            st.write("🏃‍♂️ 开始生成各章节...")
+            generator.run()
+            
+            status.update(label="✅ 生成成功!", state="complete", expanded=False)
+            
+            # 记录成功状态
+            st.session_state['last_run_result'] = {
+                "success": True,
+                "output_dir": str(OUTPUT_DIR),
+                "output_filename": output_filename
+            }
+            st.rerun()
+            
+    except Exception as e:
+        st.error(f"生成过程中发生错误: {e}")
+        logger.error("PPT生成失败", exc_info=True)
+        st.session_state['last_run_result'] = {
+            "success": False,
+            "error_msg": str(e)
+        }
 
 # ===================================================================
-# --- 日志输出 ---
+# --- 结果展示区 ---
 # ===================================================================
-# 3. 无论何时重新运行，都检查session_state并展示上一次的结果
 if st.session_state['last_run_result']:
-    st.divider() # 添加一条分割线，区分配置区和结果区
-
-    col1, col2 = st.columns([0.85, 0.15]) # 创建两列，让标题和按钮在同一行
+    st.divider()
+    result = st.session_state['last_run_result']
+    
+    col1, col2 = st.columns([0.85, 0.15])
     with col1:
         st.header("运行结果")
     with col2:
@@ -193,30 +210,23 @@ if st.session_state['last_run_result']:
             st.session_state['last_run_result'] = None
             st.rerun()
 
-    result_data = st.session_state['last_run_result']
-    
-    if result_data["returncode"] == 0:
+    if result.get("success"):
         st.success("🎉 报告生成成功！")
         
-        # 展示下载按钮
-        output_file_path = os.path.join(str(result_data['output_dir']), str(result_data['output_filename']))
-        if os.path.exists(output_file_path):
+        output_file_path = Path(result['output_dir']) / result['output_filename']
+        if output_file_path.exists():
             with open(output_file_path, "rb") as file:
                 st.download_button(
-                    label="📥 点击下载生成的PPT报告", data=file, file_name=result_data['output_filename'],
-                    mime="application/vnd.openxmlformats-officedocument.presentationml.presentation", use_container_width=True
+                    label="📥 点击下载生成的PPT报告", 
+                    data=file, 
+                    file_name=result['output_filename'],
+                    mime="application/vnd.openxmlformats-officedocument.presentationml.presentation", 
+                    use_container_width=True,
+                    type="primary"
                 )
         else:
-            st.warning(f"报告生成显示成功，但未找到输出文件：{output_file_path}")
+            st.warning(f"逻辑显示成功，但未找到文件：{output_file_path}")
     else:
-        # 失败的运行，展示所有能获取到的信息
-        st.error("报告生成失败！请查看下面的详细信息：")
-        
-        # 同时展示标准输出（我们的探针在这里）和标准错误（真正的Traceback）
-        if result_data["stdout"]:
-            with st.expander("点击查看后台标准输出（可能包含诊断线索）", expanded=True):
-                st.code(result_data["stdout"], language='log')
-        
-        if result_data["stderr"]:
-            with st.expander("点击查看后台错误输出", expanded=True):
-                st.code(result_data["stderr"], language='bash')
+        st.error("❌ 报告生成失败")
+        with st.expander("查看错误详情", expanded=True):
+            st.code(result.get("error_msg", "未知错误"), language='bash')
