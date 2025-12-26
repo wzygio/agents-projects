@@ -332,22 +332,16 @@ class PptEngineConfig(BaseConfig):
 # 5. 全局单例 (CONFIG)
 # =============================================================================
 
-# [重要] 变量名统一大写 CONFIG，以便 src/config.py 进行注入: excel_config_module.CONFIG = ...
-CONFIG: Optional[PptEngineConfig] = None 
-
-def load_config(yaml_path: Optional[str] = None) -> PptEngineConfig:
+def load_config() -> 'PptEngineConfig':
     """
-    [独立运行入口] 
-    如果外部没有注入 CONFIG，则尝试手动加载。
-    主要用于单元测试或直接运行此文件。
+    [独立运行入口 / Standalone Loader]
+    当此模块被独立运行测试时使用。
+    它会尝试从本地默认路径加载配置，不依赖 Server 的注入。
     """
-    global CONFIG
-    if CONFIG: return CONFIG
-    
-    # 如果没传路径，使用工厂方法的默认逻辑
     try:
-        CONFIG = PptEngineConfig.from_app_config(None) # 触发模式二
-        return CONFIG
+        # 传入 None 触发 from_app_config 的"独立模式/调试模式"逻辑
+        # 即：自动寻找本地 yaml 文件
+        return PptEngineConfig.from_app_config(None)
     except Exception as e:
         logging.error(f"Standalone load failed: {e}")
         raise

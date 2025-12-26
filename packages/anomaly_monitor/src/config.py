@@ -172,19 +172,16 @@ class AnomalyMonitorConfig(BaseConfig):
 # 4. 全局单例 (CONFIG)
 # =============================================================================
 
-CONFIG: Optional[AnomalyMonitorConfig] = None 
-
-def load_config() -> AnomalyMonitorConfig:
+def load_config() -> 'AnomalyMonitorConfig':
     """
-    独立运行时的加载入口 (Fallback)
+    [独立运行入口 / Standalone Loader]
+    当此模块被独立运行测试时使用。
+    它会尝试从本地默认路径加载配置，不依赖 Server 的注入。
     """
-    global CONFIG
-    if CONFIG: return CONFIG
-    
     try:
-        # 尝试触发独立模式加载
-        CONFIG = AnomalyMonitorConfig.from_app_config(None)
-        return CONFIG
+        # 传入 None 触发 from_app_config 的"独立模式/调试模式"逻辑
+        # 即：自动寻找本地 yaml 文件
+        return AnomalyMonitorConfig.from_app_config(None)
     except Exception as e:
-        logging.error(f"AnomalyMonitor standalone load failed: {e}")
+        logging.error(f"Standalone load failed: {e}")
         raise

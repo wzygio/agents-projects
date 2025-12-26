@@ -9,7 +9,6 @@ common:
 
 path:
   base_dir: "."
-  # 定义公共目录，供子模块复用
   input: "data/input"
   output: "output"
   logs: "logs"

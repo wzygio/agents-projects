@@ -1,6 +1,7 @@
 from typing import List, Optional, Dict, Any, Union
 from pathlib import Path
 from pydantic import BaseModel, Field
+import logging, yaml
 
 def get_project_root() -> Path:
     """Returns project root folder."""
@@ -132,43 +133,96 @@ class WebAutomationConfig(BaseConfig):
     download_dir: str = "downloads"
 
     @classmethod
-    def from_app_config(cls, app_config_dict: Dict[str, Any]) -> 'WebAutomationConfig':
+    def from_app_config(cls, app_config_dict: Optional[Dict[str, Any]] = None) -> 'WebAutomationConfig':
         """
-        工厂方法：从全局 AppConfig 字典中提取所需信息并构建对象。
+        [双模启动工厂]
+        1. 模式一 (集成模式): 优先从全局 AppConfig 字典中提取配置。
+           - 需包含 'web_automation' 键 (新标准) 或 直接包含 'browser'/'daily_report' (兼容旧标准)。
+        2. 模式二 (独立模式): 如果失败，尝试加载本地 'web_automation_config.yaml'。
         """
-        # 1. 提取 browser 配置
-        browser_data = app_config_dict.get('browser', {})
+        # =========================================================
+        # 模式一：集成模式 (Global Injection)
+        # =========================================================
+        if app_config_dict:
+            # 1. 尝试标准化提取：查找 'web_automation' 子键 (推荐)
+            if 'web_automation' in app_config_dict:
+                logging.info("[WebAutomation] Initializing from Global AppConfig (Standard Key)...")
+                data = app_config_dict['web_automation']
+                
+                # 处理可能存在的嵌套路径注入 (可选)
+                # if 'path' in app_config_dict and 'download_dir' not in data: ...
+
+                return cls(**data)
+            
+            # 2. 尝试扁平化提取 (兼容旧逻辑: browser/daily_report 在根节点)
+            # 只有当 browser 和 daily_report 同时存在时才认为是有效配置
+            elif 'browser' in app_config_dict and 'daily_report' in app_config_dict:
+                logging.info("[WebAutomation] Initializing from Global AppConfig (Flat Keys)...")
+                
+                browser_data = app_config_dict.get('browser', {})
+                daily_report_data = app_config_dict.get('daily_report', {})
+                
+                # 路径处理
+                path_data = app_config_dict.get('path', {})
+                input_dir = path_data.get('input_path') or path_data.get('input', 'downloads')
+
+                return cls(
+                    browser=BrowserConfig(**browser_data),
+                    daily_report=DailyReportConfig(**daily_report_data),
+                    download_dir=str(input_dir)
+                )
+
+        # =========================================================
+        # 模式二：独立/调试模式 (Standalone Mode)
+        # =========================================================
+        logging.warning("[WebAutomation] No valid global config context. Switching to Standalone Mode.")
+
+        # 1. 定位配置文件
+        # 假设结构: packages/web_automation/config/web_automation_config.yaml
+        try:
+            # __file__ = packages/web_automation/src/config.py
+            # parents[2] = packages/web_automation
+            base_dir = Path(__file__).resolve().parents[2]
+            local_config_path = base_dir / "config" / "web_automation_config.yaml"
+        except (NameError, IndexError):
+            # 兜底：假设在当前目录运行
+            local_config_path = Path("config/web_automation_config.yaml")
+
+        # 2. 加载并构建
+        if local_config_path.exists():
+            logging.info(f"[WebAutomation] Loading local config from: {local_config_path}")
+            with open(local_config_path, 'r', encoding='utf-8') as f:
+                local_data = yaml.safe_load(f) or {}
+            
+            # 这里假设本地 YAML 的结构已经是标准的 {browser:..., daily_report:...}
+            # 如果 YAML 根节点就是 browser/daily_report，直接解包
+            return cls(**local_data)
         
-        # 2. 提取 daily_report 配置
-        daily_report_data = app_config_dict.get('daily_report', {})
-        
-        # 3. 提取路径配置 (如果有的话)
-        # 注意：这里需要兼容 YAML 中 'path.input_path' 的命名
-        path_data = app_config_dict.get('path', {})
-        
-        # 优先取 input_path，如果没有取 input，再没有取默认值
-        input_dir = path_data.get('input_path') or path_data.get('input', 'downloads')
-        
-        return cls(
-            browser=BrowserConfig(**browser_data),
-            daily_report=DailyReportConfig(**daily_report_data),
-            download_dir=str(input_dir)
+        # =========================================================
+        # 兜底失败
+        # =========================================================
+        error_msg = (
+            f"Cannot initialize WebAutomationConfig: "
+            f"Global context missing 'web_automation' (or 'browser'/'daily_report') "
+            f"and local file not found at {local_config_path}"
         )
+        logging.error(error_msg)
+        raise ValueError(error_msg)
 
 # =============================================================================
 # 4. 全局单例 (CONFIG)
 # =============================================================================
 
-CONFIG: Optional[WebAutomationConfig] = None
-
-def load_config() -> WebAutomationConfig | None:
+def load_config() -> 'WebAutomationConfig':
     """
-    独立运行时的加载逻辑 (Fallback)
+    [独立运行入口 / Standalone Loader]
+    当此模块被独立运行测试时使用。
+    它会尝试从本地默认路径加载配置，不依赖 Server 的注入。
     """
-    global CONFIG
-    if CONFIG: return CONFIG
-    
-    # 这里为了简单，假设总是由主程序注入。
-    # 如果您需要独立运行 web_automation 的脚本，可以在这里加类似 PPT/Excel 的 yaml 加载逻辑
-    # 目前仅做占位
-    return CONFIG
+    try:
+        # 传入 None 触发 from_app_config 的"独立模式/调试模式"逻辑
+        # 即：自动寻找本地 yaml 文件
+        return WebAutomationConfig.from_app_config(None)
+    except Exception as e:
+        logging.error(f"Standalone load failed: {e}")
+        raise

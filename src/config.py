@@ -6,16 +6,17 @@ from typing import Optional, Dict, Any
 from pydantic import BaseModel
 
 # 导入各模块的配置定义 (各模块自己维护自己的 Config 类)
-# 注意：这里导入不仅仅是为了类型定义，也是为了后续注入单例
+from packages.anomaly_monitor.src import config as anomaly_monitor_config_module
 from packages.web_automation.src import config as web_config_module
-from packages.ppt_engine.src import config as ppt_config_module
 from packages.excel_engine.src import config as excel_config_module
+from packages.ppt_engine.src import config as ppt_config_module
 
 
 # 为了 Pydantic 定义，我们需要具体的类
+from packages.anomaly_monitor.src.config import AnomalyMonitorConfig
 from packages.web_automation.src.config import WebAutomationConfig
-from packages.ppt_engine.src.config import PptEngineConfig
 from packages.excel_engine.src.config import ExcelEngineConfig
+from packages.ppt_engine.src.config import PptEngineConfig
 
 # =============================================================================
 # 1. 基础配置模型
@@ -51,9 +52,10 @@ class AppConfig(BaseConfig):
     paths: PathConfig
     
     # 子模块配置 (通过 includes 动态加载后注入)
+    anomaly_monitor: Optional[AnomalyMonitorConfig] = None
     web_automation: Optional[WebAutomationConfig] = None
-    ppt_engine: Optional[PptEngineConfig] = None
     excel_engine: Optional[ExcelEngineConfig] = None
+    ppt_engine: Optional[PptEngineConfig] = None
 
 # =============================================================================
 # 3. 智能加载器 (The "Glue" Logic)
@@ -102,31 +104,11 @@ def _merge_config_files(root_config_path: Path) -> Dict[str, Any]:
 
     return main_data
 
-def _sync_submodules(app_config: AppConfig):
-    """
-    [关键修复] 将加载好的配置实例，反向注入到各子模块的全局变量中。
-    确保子模块内部代码 (如 import config) 能获取到由全局统一加载的配置。
-    """
-    # 1. Sync PPT Engine
-    if app_config.ppt_engine:
-        # 直接赋值给子模块的全局变量 CONFIG
-        ppt_config_module.CONFIG = app_config.ppt_engine
-        logging.info("Synced PptEngineConfig to packages.ppt_engine.src.config.CONFIG")
-
-    # 2. Sync Web Automation
-    if app_config.web_automation:
-        # 假设 Web 模块也有类似的 CONFIG 变量
-        web_config_module.CONFIG = app_config.web_automation
-        logging.info("Synced WebAutomationConfig to packages.web_automation.src.config.CONFIG")
-        pass
-
-    # 3. Sync Excel Engine
-    if app_config.excel_engine:
-        excel_config_module.CONFIG = app_config.excel_engine
-        logging.info("Synced ExcelEngineConfig to packages.excel_engine.src.config.CONFIG")
-        pass
-
 def load_config(yaml_path: str = "config/config.yaml") -> AppConfig:
+    """
+    加载并构建 AppConfig 对象。
+    不再执行任何全局变量注入操作。
+    """
     global _config_instance
     if _config_instance:
         return _config_instance
@@ -134,58 +116,30 @@ def load_config(yaml_path: str = "config/config.yaml") -> AppConfig:
     full_path = PROJECT_ROOT / yaml_path
     
     try:
-        # 1. 获取原始的大字典 (Raw Dictionary)
-        # 此时 raw_data 包含了 common, path, ppt_engine(字典形式) 等所有数据
+        # 1. 获取合并后的字典
         raw_data = _merge_config_files(full_path)
         
-        # =========================================================================
-        # [关键步骤] 激活工厂方法 (Activate Factory Methods)
-        # =========================================================================
-        
-        # 我们不让 AppConfig 自动转换 ppt_engine，而是手动调用工厂
-        # 目的：为了让 from_app_config 有机会读取 raw_data 中的全局字段 (如 paths, common)
+        # 2. 使用工厂方法实例化子模块配置
+        # 这让子模块有机会从 raw_data 中读取全局字段(如 paths)
         
         if 'ppt_engine' in raw_data:
-            logging.info("Initializing PPT Engine via Factory Method...")
-            # 调用工厂方法，把整个 raw_data 传进去，而不只是 ppt_engine 那一部分
-            ppt_instance = PptEngineConfig.from_app_config(raw_data)
-            
-            # [核心] 用实例化后的对象，替换掉字典里的原始数据
-            # Pydantic 非常智能：如果在初始化时字段已经是对象了，它就会直接使用，不再重新校验
-            raw_data['ppt_engine'] = ppt_instance
-
-        # 同样的处理也可以用于其他模块
+            raw_data['ppt_engine'] = PptEngineConfig.from_app_config(raw_data)
+        
         if 'web_automation' in raw_data:
-             web_instance = WebAutomationConfig.from_app_config(raw_data)
-             raw_data['web_automation'] = web_instance
-             pass
-        
+            raw_data['web_automation'] = WebAutomationConfig.from_app_config(raw_data)
+            
         if 'excel_engine' in raw_data:
-             excel_instance = ExcelEngineConfig.from_app_config(raw_data)
-             raw_data['excel_engine'] = excel_instance
-             pass
+            raw_data['excel_engine'] = ExcelEngineConfig.from_app_config(raw_data)
 
-        # =========================================================================
-        # 2. 创建全局配置对象
-        # =========================================================================
-        
-        # 此时传入的 raw_data 中，'ppt_engine' 已经是一个清洗好的 PptEngineConfig 对象了
+        if 'anomaly_monitor' in raw_data:
+             raw_data['anomaly_monitor'] = AnomalyMonitorConfig.from_app_config(raw_data)
+
+        # 3. 创建对象
         _config_instance = AppConfig(**raw_data)
         
-        # 3. 同步单例到子模块 (保留之前的逻辑)
-        _sync_submodules(_config_instance)
-        
-        logging.info("Global configuration loaded and synced successfully.")
+        logging.info("Global configuration loaded successfully (Dependency Injection Ready).")
         return _config_instance
         
     except Exception as e:
         logging.critical(f"Failed to load global configuration: {e}", exc_info=True)
         raise
-
-# 导出单例 (注意：直接执行可能会在没有日志配置时就运行，建议在 main 中显式调用 load_config)
-# 为了方便 import，这里保留自动加载，但建议由 entry point 控制初始化时机
-try:
-    config = load_config()
-except Exception:
-    # 允许在某些测试环境下导入时不报错，但 config 会是 None
-    config = None
