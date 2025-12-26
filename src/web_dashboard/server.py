@@ -1,20 +1,33 @@
 import asyncio
 import uvicorn
-from fastapi import FastAPI
-from fastapi.responses import StreamingResponse, HTMLResponse, RedirectResponse
-from fastapi.staticfiles import StaticFiles
-from fastapi.middleware.cors import CORSMiddleware
 import json
-import random
 import datetime
-import os
-import sys
+import os, sys, logging
 import subprocess
-import time
-import logging
-import signal
 import atexit
 from pathlib import Path
+from queue import Queue, Empty
+from concurrent.futures import ThreadPoolExecutor
+
+from fastapi import FastAPI
+from fastapi.responses import StreamingResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
+
+from src.config import AppConfig
+
+# --- 引入项目核心组件 ---
+# 确保 PYTHONPATH 包含项目根目录，否则这几行导入会报错
+sys.path.append(str(Path(__file__).resolve().parents[2])) 
+
+# 1. 引入全局配置加载器 (假设 src/config.py 存在，如果没有则使用空字典兜底)
+try:
+    from src.config import load_config
+except ImportError:
+    load_config = lambda: {} # 兜底：如果找不到全局配置加载器，返回空字典，依赖 Adapter 的本地测试配置
+
+# 2. 引入 PPT 适配器
+from packages.ppt_engine.src.adapter import PPTEngineAdapter
 
 # --- 1. 配置日志 ---
 logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(levelname)s: %(message)s')
@@ -31,167 +44,204 @@ app.add_middleware(
 
 # --- 2. 路径配置 ---
 BASE_DIR = Path(__file__).resolve().parent
-PROJECT_ROOT = BASE_DIR.parent.parent # 回溯到 agents_projects 根目录
+PROJECT_ROOT = BASE_DIR.parent.parent 
 STATIC_DIR = BASE_DIR / "static"
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
+# --- 3. 全局资源池 ---
+# 用于执行阻塞式后台任务 (PPT生成、Excel处理)
+executor = ThreadPoolExecutor(max_workers=3) 
+
 # =============================================================================
 # 核心组件：服务进程管理器 (Service Process Manager)
-# 职责：像 Docker Compose 一样，确保 PPT 和 Excel 的 UI 服务一直活着
 # =============================================================================
 class ServiceManager:
     def __init__(self):
-        self.services = {} # 存储子进程对象
+        self.services = {} 
         self.is_shutting_down = False
 
     def _kill_existing_process_on_port(self, port):
-        """[工具] 强力查杀占用端口的旧进程 (Windows/Linux)"""
+        """[工具] 强力查杀占用端口的旧进程"""
         try:
             if os.name == 'nt': # Windows
-                # 查找占用端口的 PID
                 cmd = f'netstat -aon | findstr :{port}'
                 result = subprocess.check_output(cmd, shell=True).decode()
                 if "LISTENING" in result:
-                    lines = result.strip().split('\n')
-                    for line in lines:
+                    for line in result.strip().split('\n'):
                         parts = line.split()
-                        pid = parts[-1]
-                        subprocess.run(f'taskkill /F /PID {pid}', shell=True, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
-                        logger.info(f"已清理占用端口 {port} 的旧进程 PID: {pid}")
+                        if len(parts) > 4:
+                            pid = parts[-1]
+                            subprocess.run(f'taskkill /F /PID {pid}', shell=True, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
+                            logger.info(f"已清理占用端口 {port} 的旧进程 PID: {pid}")
             else: # Linux/Mac
                 subprocess.run(f"lsof -ti:{port} | xargs kill -9", shell=True)
         except Exception:
-            pass # 端口未被占用，忽略
+            pass 
 
     def start_service(self, name: str, script_path: str, port: int):
-        """启动一个 Streamlit 服务"""
+        """启动 Streamlit 子服务"""
         self._kill_existing_process_on_port(port)
         
-        # 构造启动命令
-        # 注意：这里我们使用 sys.executable 确保使用当前的虚拟环境 Python
         cmd = [
             sys.executable, "-m", "streamlit", "run", 
             script_path,
             "--server.port", str(port),
-            "--server.headless", "true", # 生产模式不自动弹窗
+            "--server.headless", "true",
             "--browser.gatherUsageStats", "false"
         ]
         
-        # 设置 PYTHONPATH，确保子进程能找到 packages
         env = os.environ.copy()
         env["PYTHONPATH"] = str(PROJECT_ROOT) + os.pathsep + env.get("PYTHONPATH", "")
 
-        logger.info(f"正在启动服务 [{name}] on Port {port}...")
-        
-        # 异步非阻塞启动
+        logger.info(f"正在启动子服务 [{name}] on Port {port}...")
         process = subprocess.Popen(
-            cmd, 
-            cwd=str(PROJECT_ROOT), # 关键：工作目录设为项目根目录
-            env=env,
-            stdout=subprocess.PIPE, # 可以在这里捕获日志做重定向
-            stderr=subprocess.PIPE
+            cmd, cwd=str(PROJECT_ROOT), env=env,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE
         )
         self.services[name] = process
         logger.info(f"✅ 服务 [{name}] 启动成功 (PID: {process.pid})")
 
     def stop_all(self):
-        """优雅关闭所有服务"""
         self.is_shutting_down = True
-        logger.info("正在关闭所有子服务...")
         for name, proc in self.services.items():
-            if proc.poll() is None: # 如果还在运行
+            if proc.poll() is None:
                 proc.terminate()
                 try:
-                    proc.wait(timeout=3)
+                    proc.wait(timeout=2)
                 except subprocess.TimeoutExpired:
                     proc.kill()
                 logger.info(f"服务 [{name}] 已停止")
 
-# 初始化管理器单例
 manager = ServiceManager()
 
 # =============================================================================
-# FastAPI 生命周期钩子
+# FastAPI 生命周期
 # =============================================================================
 @app.on_event("startup")
 async def startup_event():
-    """服务器启动时，自动拉起 PPT 和 Excel 的 UI"""
-    logger.info(">>> 主编排服务启动，正在唤醒子系统...")
-    
-    # 1. 启动 PPT 引擎 UI (Port 8501)
-    # 注意：路径要指向您最新的 packages 结构
+    """启动时拉起 UI 控制台"""
+    logger.info(">>> 主编排服务启动...")
+    # 启动 PPT 控制台 (人工校准模式用)
     ppt_app_path = "packages/ppt_engine/src/interface/app.py"
-    manager.start_service("PPT_Engine_UI", ppt_app_path, 8501)
-    
-    # 2. 启动 Excel 引擎 UI (Port 8502)
-    # 假设您也有对应的 app.py
-    # excel_app_path = "packages/excel_engine/src/interface/app.py" 
-    # manager.start_service("Excel_Engine_UI", excel_app_path, 8502)
+    if (PROJECT_ROOT / ppt_app_path).exists():
+        manager.start_service("PPT_Engine_UI", ppt_app_path, 8501)
+    else:
+        logger.warning(f"⚠️ 找不到 PPT UI 文件: {ppt_app_path}，跳过启动。")
 
 @app.on_event("shutdown")
 async def shutdown_event():
-    """服务器关闭时，清理子进程"""
     manager.stop_all()
+    executor.shutdown(wait=False)
 
-# 注册退出清理 (防止 Ctrl+C 导致的僵尸进程)
 atexit.register(manager.stop_all)
-
 
 # =============================================================================
 # 业务逻辑：工作流配置
 # =============================================================================
 
+# 【关键配置】在这里切换 "auto" 或 "human" 模式
 STEPS_CONFIG = {
     "daily_report": [
-        # --- 阶段 1: 自动化数据准备 ---
-        {"id": 1, "name": "数据采集与清洗", "detail": "Playwright 正在后台下载数据...", "type": "auto"},
-        {"id": 2, "name": "基础数据校验", "detail": "正在检查数据完整性...", "type": "auto"},
+        # 步骤 1: 自动化数据准备 (演示：暂无真实 Adapter，仍用 Mock)
+        {"id": 1, "name": "异常监控扫描", "type": "auto", "engine": "anomaly_monitor"},
         
-        # --- 阶段 2: 人工介入 (Excel) ---
-        # 这里的 URL 指向的是已经启动好的常驻服务
-        {"id": 3, "name": "Excel 异常判定", "detail": "等待人工确认...", 
-         "type": "human", 
-         "action": {"label": "打开 Excel 控制台", "url": "http://localhost:8502"}},
+        # 步骤 2: PPT 生成 (关键演示点)
+        # -----------------------------------------------------------
+        # 模式 A: 全自动模式 (Server 直接调用 PPT Adapter)
+        # {"id": 2, "name": "PPT 自动生成", "detail": "正在调用 PPT 引擎...", "type": "auto", "engine": "ppt"},
         
-        # --- 阶段 3: 人工介入 (PPT) ---
-        {"id": 4, "name": "PPT 画布生成", "detail": "等待人工调整...", 
-         "type": "human", 
+        # 模式 B: 人工校准模式 (Server 引导用户去 UI)
+        {"id": 2, "name": "PPT 画布生成", "detail": "等待人工调整...", "type": "human", 
          "action": {"label": "打开 PPT 控制台", "url": "http://localhost:8501"}},
-         
-        # --- 阶段 4: 最终交付 ---
-        {"id": 5, "name": "归档与分发", "detail": "正在发送邮件...", "type": "auto"}
+        # -----------------------------------------------------------
+
+        # 步骤 3: 归档 (Mock)
+        {"id": 3, "name": "归档与分发", "detail": "正在发送邮件...", "type": "mock_auto"}
     ]
 }
 
 # =============================================================================
-# 接口定义
+# 接口定义 (核心逻辑修改)
 # =============================================================================
 
 async def event_generator(task_type: str):
     """
-    流式任务执行器
-    如果是 'auto' 类型，自动执行（调用后台函数）。
-    如果是 'human' 类型，生成一个链接卡片，并暂停流程（或者等待回调）。
+    流式任务执行器 (支持 Real Adapter 和 Human Loop)
     """
     steps = STEPS_CONFIG.get(task_type, [])
     
+        # 1. 加载全局配置 (用于传给 Adapter)
+    try:
+        global_config_obj = load_config()
+        
+        if isinstance(global_config_obj, AppConfig):
+            global_config = global_config_obj.model_dump()
+        else:
+            # 如果是字典或其他类型，直接赋值
+            global_config = global_config_obj if isinstance(global_config_obj, dict) else {}
+    except Exception as e:
+        logger.warning(f"加载全局配置失败: {e}，将使用 Adapter 默认测试配置。")
+        global_config = {}
+
+
     for step in steps:
-        # 1. 发送步骤开始信号
+        # --- 发送步骤开始信号 ---
         yield json.dumps({
             "status": "running", 
             "step_id": step["id"], 
             "log": f"[{datetime.datetime.now().strftime('%H:%M:%S')}] 开始步骤: {step['name']}"
         }) + "\n"
         
-        # 模拟处理延迟
-        await asyncio.sleep(1)
+        step_type = step.get("type")
 
-        # 2. 分支处理
-        if step.get("type") == "human":
-            # --- 人工步骤 ---
-            # 我们向前端发送一个特殊状态，告诉前端“显示按钮”
+        # === 分支 A: 真实自动化任务 (调用 Adapter) ===
+        if step_type == "auto":
+            engine_name = step.get("engine")
+            
+            if engine_name == "ppt":
+                # 1. 创建通信队列
+                log_queue = Queue()
+                adapter = PPTEngineAdapter()
+                
+                # 2. 在线程池中提交任务 (非阻塞)
+                # 注意：config 字典被传入
+                future = executor.submit(adapter.run, global_config, log_queue)
+                
+                # 3. 循环读取日志并推送给前端
+                while not future.done() or not log_queue.empty():
+                    try:
+                        # 非阻塞读取，防止死锁
+                        log_msg = log_queue.get(timeout=0.1)
+                        yield json.dumps({
+                            "status": "running", 
+                            "step_id": step["id"], 
+                            "log": log_msg
+                        }) + "\n"
+                    except Empty:
+                        # 队列空了，稍作休息等待任务产生新日志
+                        await asyncio.sleep(0.1)
+                
+                # 4. 获取最终结果
+                result = future.result() # 这里会抛出 Adapter 内部未捕获的异常
+                
+                if result.get("status") == "success":
+                    yield json.dumps({
+                        "status": "completed",
+                        "step_id": step["id"],
+                        "log": f"✅ {step['name']} 成功。产物: {result.get('output_path')}",
+                        "result": {"type": "file", "label": "下载产物", "url": "#"} # 示例
+                    }) + "\n"
+                else:
+                    yield json.dumps({
+                        "status": "error",
+                        "step_id": step["id"],
+                        "log": f"❌ {step['name']} 失败: {result.get('message')}"
+                    }) + "\n"
+
+        # === 分支 B: 人工校准任务 (UI Link) ===
+        elif step_type == "human":
             yield json.dumps({
-                "status": "waiting_input", # 特殊状态：等待输入
+                "status": "waiting_input",
                 "step_id": step["id"],
                 "log": f"请点击下方按钮进入 [{step['name']}] 进行操作。",
                 "result": {
@@ -201,21 +251,17 @@ async def event_generator(task_type: str):
                 }
             }) + "\n"
             
-            # 在真实场景中，这里应该挂起（await future），直到用户在 Streamlit 点了“完成”并通过 Webhook 通知 Server
-            # 这里为了演示，我们在 3 秒后自动视为完成
+            # 模拟等待用户操作 (真实场景应通过 Webhook 唤醒)
             await asyncio.sleep(3) 
-            
-        else:
-            # --- 自动步骤 ---
-            # 这里应该调用 packages.web_automation.download_service 等真实代码
-            await asyncio.sleep(1)
 
-        # 3. 发送步骤完成信号
-        yield json.dumps({
-            "status": "completed", 
-            "step_id": step["id"],
-            "log": f"步骤 [{step['name']}] 执行完毕。"
-        }) + "\n"
+        # === 分支 C: Mock 任务 (用于演示) ===
+        else:
+            await asyncio.sleep(1) # 假装干活
+            yield json.dumps({
+                "status": "completed", 
+                "step_id": step["id"], 
+                "log": f"Mock 任务 [{step['name']}] 完成。"
+            }) + "\n"
 
     yield json.dumps({"status": "done", "log": "Workflow Finished."}) + "\n"
 
@@ -231,6 +277,4 @@ async def main():
         return HTMLResponse(content=f.read())
 
 if __name__ == "__main__":
-    # 启动主编排服务 (Port 8507)
-    # 注意：这里不需要 reload=True，否则 Manager 可能会重复启动子进程
     uvicorn.run("server:app", host="0.0.0.0", port=8507)

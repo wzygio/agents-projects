@@ -2,8 +2,6 @@
 import streamlit as st
 import pandas as pd
 import logging
-import sys
-from pathlib import Path
 
 # --- 1. 初始化系统环境 ---
 from application.hl_report_service import HLReportService

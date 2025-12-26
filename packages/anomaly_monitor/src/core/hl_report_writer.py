@@ -7,7 +7,7 @@ from typing import Optional
 from core.concentration_analyzer import ConcentrationAnalyzer
 logger = logging.getLogger(__name__)
 
-class HLReportGenerator:
+class HLReportWriter:
     """
     【核心组件】HL 通报文本生成器 (V2.0 主动预生成版)
     

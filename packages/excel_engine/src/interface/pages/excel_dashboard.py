@@ -12,8 +12,8 @@ from packages.excel_engine.src.config import load_config
 from interface.components.app_utils import AppUtils
 
 # --- 2. 导入核心业务逻辑 (Use Cases) ---
-from application.generate_report import GenerateReportUseCase
-from application.refine_styles import RefineStylesUseCase
+from packages.excel_engine.src.application.report_genrator import GenerateReportUseCase
+from packages.excel_engine.src.application.style_renderer import RefineStylesUseCase
 
 # --- 3. 初始化系统 ---
 from packages.common_utils.src.infrastructure.app_setup import AppSetup

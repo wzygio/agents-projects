@@ -1,3 +1,4 @@
+# file_path: packages/anomaly_monitor/src/application/hl_report_service.py
 import logging, sys
 from pathlib import Path
 import pandas as pd
@@ -13,7 +14,7 @@ from infrastructure.repositories.hl_data_repository import HLDataRepository
 from infrastructure.repositories.mwdl_data_repository import MWDLDataRepository
 
 # 导入核心业务逻辑
-from core.hl_report_generator import HLReportGenerator
+from packages.anomaly_monitor.src.core.hl_report_writer import HLReportWriter
 from core.concentration_analyzer import ConcentrationAnalyzer
 from core.anomaly_detector import AnomalyDetector
 from infrastructure.repositories.hl_ledger_repository import HLLedgerRepository
@@ -28,7 +29,7 @@ class HLReportService:
         
         # Components
         self.detector: Optional[AnomalyDetector] = None
-        self.generator: Optional[HLReportGenerator] = None
+        self.writer: Optional[HLReportWriter] = None
         self.ledger_repo = HLLedgerRepository("daily_report.hl_ledger")
         self.record_repo = HLLedgerRepository("daily_report.record_ledger")
 
@@ -53,8 +54,8 @@ class HLReportService:
             # Detector (注入分析器)
             self.detector = AnomalyDetector(df_yield_detail)
             
-            # Generator (注入分析器 - 用于兜底)
-            self.generator = HLReportGenerator(shared_analyzer) # [新增]
+            # Writer (注入分析器 - 用于兜底)
+            self.writer = HLReportWriter(shared_analyzer) # [新增]
             
             self._is_ready = True
             logger.info(f"✅ [Service] 资源加载完毕. HL行数: {len(self.df_hl)}")
@@ -123,8 +124,8 @@ class HLReportService:
             if a_type == '真实异常':
                 pre_calc_conc = decision.get('conc_text', None)
                 
-                # 直接调用！传入 full_df=self.df_hl，让 Generator 自己去查
-                draft = self.generator.generate_text( # type: ignore
+                # 直接调用！传入 full_df=self.df_hl，让 Writer 自己去查
+                draft = self.writer.generate_text( # type: ignore
                     row, 
                     pre_calc_conc_text=pre_calc_conc,
                     full_df=self.df_hl  # 👈 关键：传入全量数据

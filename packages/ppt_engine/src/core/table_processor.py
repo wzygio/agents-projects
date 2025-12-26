@@ -18,7 +18,7 @@ class TableProcessor:
     """
     一个专门用于创建、格式化和填充PPT表格的类。
     """
-    def __init__(self, slide, data, cfg: dict):
+    def __init__(self, cfg: Optional[TableLayoutConfig] = None):
         """
         TableProcessor的构造函数（目前作为占位符，未来会充实）。
         
@@ -26,10 +26,7 @@ class TableProcessor:
         :param data: 用于填充表格的数据 (例如 a pandas DataFrame)。
         :param cfg: 与表格相关的配置字典。
         """
-        self.slide = slide
-        self.data = data
-        self.cfg = cfg
-        self.table = None # 用于存放创建后的表格对象
+        self.cfg = cfg                             
         logging.info("TableProcessor 实例已创建。")
 
     # ==============================================================================
