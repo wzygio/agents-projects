@@ -1,4 +1,4 @@
-# 文件路径：src\excel_generator_project\style_generator.py
+# 文件路径：packages\excel_engine\src\application\style_renderer.py
 import logging
 import sys
 import os

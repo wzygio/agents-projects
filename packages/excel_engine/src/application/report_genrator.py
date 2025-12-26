@@ -1,7 +1,5 @@
-# 文件路径：src\excel_generator_project\content_generator.py
-import logging
-import sys
-import os
+# 文件路径：packages\excel_engine\src\application\report_genrator.py
+import logging 
 from pathlib import Path
 
 from packages.excel_engine.src.config import ExcelEngineConfig
@@ -28,7 +26,7 @@ class GenerateReportUseCase:
         data_results = data_processor.run()
         
         # 2. 组装数据
-        generator_config = self.config.copy()
+        generator_config = self.config
         generator_config['EXTERNAL_DATA'] = {
             'exceptions_data': exception_results,
             'yield_data': data_results

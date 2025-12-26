@@ -2,8 +2,10 @@ import asyncio
 import uvicorn
 import json
 import datetime
-import os, sys, logging
+import os
+import sys
 import subprocess
+import logging
 import atexit
 from pathlib import Path
 from queue import Queue, Empty
@@ -17,17 +19,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from src.config import AppConfig
 
 # --- 引入项目核心组件 ---
-# 确保 PYTHONPATH 包含项目根目录，否则这几行导入会报错
+# 确保 PYTHONPATH 包含项目根目录
 sys.path.append(str(Path(__file__).resolve().parents[2])) 
 
-# 1. 引入全局配置加载器 (假设 src/config.py 存在，如果没有则使用空字典兜底)
+# 1. 引入全局配置加载器
 try:
-    from src.config import load_config
+    from src.config import load_config 
 except ImportError:
-    load_config = lambda: {} # 兜底：如果找不到全局配置加载器，返回空字典，依赖 Adapter 的本地测试配置
-
-# 2. 引入 PPT 适配器
-from packages.ppt_engine.src.adapter import PPTEngineAdapter
+    load_config = lambda: {} 
 
 # --- 1. 配置日志 ---
 logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(levelname)s: %(message)s')
@@ -49,7 +48,6 @@ STATIC_DIR = BASE_DIR / "static"
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 # --- 3. 全局资源池 ---
-# 用于执行阻塞式后台任务 (PPT生成、Excel处理)
 executor = ThreadPoolExecutor(max_workers=3) 
 
 # =============================================================================
@@ -82,9 +80,14 @@ class ServiceManager:
         """启动 Streamlit 子服务"""
         self._kill_existing_process_on_port(port)
         
+        full_path = PROJECT_ROOT / script_path
+        if not full_path.exists():
+            logger.warning(f"⚠️ 服务 [{name}] 脚本不存在: {full_path}，跳过启动。")
+            return
+
         cmd = [
             sys.executable, "-m", "streamlit", "run", 
-            script_path,
+            str(full_path),
             "--server.port", str(port),
             "--server.headless", "true",
             "--browser.gatherUsageStats", "false"
@@ -121,12 +124,27 @@ manager = ServiceManager()
 async def startup_event():
     """启动时拉起 UI 控制台"""
     logger.info(">>> 主编排服务启动...")
-    # 启动 PPT 控制台 (人工校准模式用)
-    ppt_app_path = "packages/ppt_engine/src/interface/app.py"
-    if (PROJECT_ROOT / ppt_app_path).exists():
-        manager.start_service("PPT_Engine_UI", ppt_app_path, 8501)
-    else:
-        logger.warning(f"⚠️ 找不到 PPT UI 文件: {ppt_app_path}，跳过启动。")
+    
+    # 1. 启动 PPT 控制台 (8501)
+    manager.start_service(
+        "PPT_Engine_UI", 
+        "packages/ppt_engine/src/interface/app.py", 
+        8501
+    )
+    
+    # 2. [新增] 启动 Excel 控制台 (8502)
+    manager.start_service(
+        "Excel_Engine_UI", 
+        "packages/excel_engine/src/interface/app.py", 
+        8502
+    )
+
+    # 3. [新增] 启动 异常监控 控制台 (8503)
+    manager.start_service(
+        "Anomaly_Monitor_UI", 
+        "packages/anomaly_monitor/src/interface/hl_app.py", 
+        8503
+    )
 
 @app.on_event("shutdown")
 async def shutdown_event():
@@ -136,138 +154,207 @@ async def shutdown_event():
 atexit.register(manager.stop_all)
 
 # =============================================================================
-# 业务逻辑：工作流配置
+# 业务逻辑：工作流配置 (全流程)
 # =============================================================================
 
-# 【关键配置】在这里切换 "auto" 或 "human" 模式
 STEPS_CONFIG = {
     "daily_report": [
-        # 步骤 1: 自动化数据准备 (演示：暂无真实 Adapter，仍用 Mock)
-        {"id": 1, "name": "异常监控扫描", "type": "auto", "engine": "anomaly_monitor"},
+        # Step 1: 异常监控 (数据源头)
+        {
+            "id": 1, 
+            "name": "异常监控扫描", 
+            "type": "hybrid", 
+            "engine": "anomaly_monitor", 
+            "action": {"label": "打开异常监控台", "url": "http://localhost:8503"} 
+        },
+        # Step 2: 报表自动下载 (新增)
+        {
+            "id": 2, 
+            "name": "报表自动下载", 
+            "type": "auto", 
+            "engine": "web_automation" 
+        },
+        # Step 3: Excel 日报生成 (新增)
+        {
+            "id": 3,
+            "name": "Excel 日报生成",
+            "type": "hybrid",
+            "engine": "excel",
+            "action": {"label": "打开 Excel 控制台", "url": "http://localhost:8502"}
+        },
         
-        # 步骤 2: PPT 生成 (关键演示点)
-        # -----------------------------------------------------------
-        # 模式 A: 全自动模式 (Server 直接调用 PPT Adapter)
-        # {"id": 2, "name": "PPT 自动生成", "detail": "正在调用 PPT 引擎...", "type": "auto", "engine": "ppt"},
-        
-        # 模式 B: 人工校准模式 (Server 引导用户去 UI)
-        {"id": 2, "name": "PPT 画布生成", "detail": "等待人工调整...", "type": "human", 
-         "action": {"label": "打开 PPT 控制台", "url": "http://localhost:8501"}},
-        # -----------------------------------------------------------
+        # Step 4: PPT 报告生成
+        {
+            "id": 4, 
+            "name": "PPT 报告生成", 
+            "type": "hybrid", 
+            "engine": "ppt", 
+            "action": {"label": "打开 PPT 控制台", "url": "http://localhost:8501"}
+        },
 
-        # 步骤 3: 归档 (Mock)
-        {"id": 3, "name": "归档与分发", "detail": "正在发送邮件...", "type": "mock_auto"}
+        # Step 5: 归档 (Mock)
+        # {"id": 5, "name": "归档与分发", "detail": "正在发送邮件...", "type": "mock_auto"}
     ]
 }
 
 # =============================================================================
-# 接口定义 (核心逻辑修改)
+# 接口定义 (支持 Hybrid 模式与多适配器)
 # =============================================================================
 
-async def event_generator(task_type: str):
+async def event_generator(task_type: str, run_mode: str = "human"):
     """
-    流式任务执行器 (支持 Real Adapter 和 Human Loop)
+    流式任务执行器
+    :param task_type: 任务类型
+    :param run_mode: 'auto' | 'human'
     """
     steps = STEPS_CONFIG.get(task_type, [])
     
-        # 1. 加载全局配置 (用于传给 Adapter)
+    # 加载全局配置
     try:
         global_config_obj = load_config()
-        
         if isinstance(global_config_obj, AppConfig):
             global_config = global_config_obj.model_dump()
+        elif isinstance(global_config_obj, dict):
+            global_config = global_config_obj
         else:
-            # 如果是字典或其他类型，直接赋值
-            global_config = global_config_obj if isinstance(global_config_obj, dict) else {}
+            global_config = {}
     except Exception as e:
         logger.warning(f"加载全局配置失败: {e}，将使用 Adapter 默认测试配置。")
         global_config = {}
 
-
     for step in steps:
-        # --- 发送步骤开始信号 ---
+        step_id = step["id"]
+        step_name = step["name"]
+        
         yield json.dumps({
             "status": "running", 
-            "step_id": step["id"], 
-            "log": f"[{datetime.datetime.now().strftime('%H:%M:%S')}] 开始步骤: {step['name']}"
+            "step_id": step_id, 
+            "log": f"[{datetime.datetime.now().strftime('%H:%M:%S')}] 开始步骤: {step_name} (模式: {run_mode})"
         }) + "\n"
         
-        step_type = step.get("type")
+        # === 动态类型判定 ===
+        current_step_type = step.get("type")
+        if current_step_type == "hybrid":
+            current_step_type = "auto" if run_mode == "auto" else "human"
 
-        # === 分支 A: 真实自动化任务 (调用 Adapter) ===
-        if step_type == "auto":
+        # =========================================================
+        # 分支 A: 自动化任务 (调用 Adapter)
+        # =========================================================
+        if current_step_type == "auto":
             engine_name = step.get("engine")
             
-            if engine_name == "ppt":
-                # 1. 创建通信队列
-                log_queue = Queue()
-                adapter = PPTEngineAdapter()
-                
-                # 2. 在线程池中提交任务 (非阻塞)
-                # 注意：config 字典被传入
+            log_queue = Queue()
+            adapter = None
+            
+            # --- 1. 路由选择 ---
+            if engine_name == "anomaly_monitor":
+                try:
+                    from packages.anomaly_monitor.src.adapter import AnomalyMonitorAdapter
+                    adapter = AnomalyMonitorAdapter()
+                except ImportError as e:
+                    yield json.dumps({"status": "error", "step_id": step_id, "log": f"❌ 导入异常监控模块失败: {e}"}) + "\n"
+                    continue
+            
+            elif engine_name == "web_automation":
+                try:
+                    from packages.web_automation.src.adapter import WebAutomationAdapter
+                    adapter = WebAutomationAdapter()
+                except ImportError as e:
+                    yield json.dumps({"status": "error", "step_id": step_id, "log": f"❌ 导入 Web 模块失败: {e}"}) + "\n"
+                    continue
+            # [新增] Excel 引擎路由
+            elif engine_name == "excel":
+                try:
+                    from packages.excel_engine.src.adapter import ExcelEngineAdapter
+                    adapter = ExcelEngineAdapter()
+                except ImportError as e:
+                    yield json.dumps({"status": "error", "step_id": step_id, "log": f"❌ 导入 Excel 引擎模块失败: {e}"}) + "\n"
+                    continue
+
+            elif engine_name == "ppt":
+                try:
+                    from packages.ppt_engine.src.adapter import PPTEngineAdapter
+                    adapter = PPTEngineAdapter()
+                except ImportError as e:
+                    yield json.dumps({"status": "error", "step_id": step_id, "log": f"❌ 导入 PPT 引擎模块失败: {e}"}) + "\n"
+                    continue
+            
+            # elif engine_name == "mock_archiver":
+            #     await asyncio.sleep(1)
+            #     yield json.dumps({"status": "completed", "step_id": step_id, "log": "✅ 模拟归档完成"}) + "\n"
+            #     continue
+            
+            # --- 2. 执行 Adapter ---
+            if adapter:
                 future = executor.submit(adapter.run, global_config, log_queue)
                 
-                # 3. 循环读取日志并推送给前端
+                # Log Pump
                 while not future.done() or not log_queue.empty():
                     try:
-                        # 非阻塞读取，防止死锁
-                        log_msg = log_queue.get(timeout=0.1)
-                        yield json.dumps({
-                            "status": "running", 
-                            "step_id": step["id"], 
-                            "log": log_msg
-                        }) + "\n"
+                        log_msg = log_queue.get(timeout=0.05)
+                        yield json.dumps({"status": "running", "step_id": step_id, "log": log_msg}) + "\n"
                     except Empty:
-                        # 队列空了，稍作休息等待任务产生新日志
-                        await asyncio.sleep(0.1)
+                        await asyncio.sleep(0.05)
                 
-                # 4. 获取最终结果
-                result = future.result() # 这里会抛出 Adapter 内部未捕获的异常
-                
-                if result.get("status") == "success":
-                    yield json.dumps({
-                        "status": "completed",
-                        "step_id": step["id"],
-                        "log": f"✅ {step['name']} 成功。产物: {result.get('output_path')}",
-                        "result": {"type": "file", "label": "下载产物", "url": "#"} # 示例
-                    }) + "\n"
-                else:
-                    yield json.dumps({
-                        "status": "error",
-                        "step_id": step["id"],
-                        "log": f"❌ {step['name']} 失败: {result.get('message')}"
-                    }) + "\n"
+                # 获取结果
+                try:
+                    result = future.result()
+                    if result.get("status") == "success":
+                        success_log = f"✅ {step_name} 执行成功。"
+                        if result.get("output_path"):
+                            success_log += f" 产物: {Path(result['output_path']).name}"
+                        
+                        yield json.dumps({
+                            "status": "completed",
+                            "step_id": step_id,
+                            "log": success_log,
+                            "result": {"type": "file", "label": "查看产物", "url": "#"} if result.get("output_path") else None
+                        }) + "\n"
+                    else:
+                        yield json.dumps({
+                            "status": "error",
+                            "step_id": step_id,
+                            "log": f"❌ {step_name} 业务失败: {result.get('message')}"
+                        }) + "\n"
+                except Exception as e:
+                    yield json.dumps({"status": "error", "step_id": step_id, "log": f"❌ {step_name} 系统异常: {str(e)}"}) + "\n"
 
-        # === 分支 B: 人工校准任务 (UI Link) ===
-        elif step_type == "human":
-            yield json.dumps({
-                "status": "waiting_input",
-                "step_id": step["id"],
-                "log": f"请点击下方按钮进入 [{step['name']}] 进行操作。",
-                "result": {
-                    "type": "link", 
-                    "label": step['action']['label'], 
-                    "url": step['action']['url']
-                }
-            }) + "\n"
-            
-            # 模拟等待用户操作 (真实场景应通过 Webhook 唤醒)
-            await asyncio.sleep(3) 
+        # =========================================================
+        # 分支 B: 人工任务 (引导至 UI)
+        # =========================================================
+        elif current_step_type == "human":
+            action = step.get("action")
+            if action:
+                yield json.dumps({
+                    "status": "waiting_input",
+                    "step_id": step_id,
+                    "log": f"请点击下方按钮进入 [{step_name}] 进行人工校准。",
+                    "result": {
+                        "type": "link", 
+                        "label": action['label'], 
+                        "url": action['url']
+                    }
+                }) + "\n"
+                await asyncio.sleep(3) 
+                yield json.dumps({"status": "completed", "step_id": step_id, "log": f"用户操作 [{step_name}] 已完成 (模拟)。"}) + "\n"
+            else:
+                 yield json.dumps({"status": "error", "step_id": step_id, "log": "配置错误：缺少 action 链接"}) + "\n"
 
-        # === 分支 C: Mock 任务 (用于演示) ===
+        # =========================================================
+        # 分支 C: 纯 Mock 任务
+        # =========================================================
+        elif current_step_type == "mock_auto":
+            await asyncio.sleep(1)
+            yield json.dumps({"status": "completed", "step_id": step_id, "log": f"Mock 任务 [{step_name}] 完成。"}) + "\n"
+        
         else:
-            await asyncio.sleep(1) # 假装干活
-            yield json.dumps({
-                "status": "completed", 
-                "step_id": step["id"], 
-                "log": f"Mock 任务 [{step['name']}] 完成。"
-            }) + "\n"
+             yield json.dumps({"status": "error", "step_id": step_id, "log": f"未知的步骤类型: {current_step_type}"}) + "\n"
 
     yield json.dumps({"status": "done", "log": "Workflow Finished."}) + "\n"
 
 @app.get("/start/{task_type}")
-async def start_task(task_type: str):
-    return StreamingResponse(event_generator(task_type), media_type="application/x-ndjson")
+async def start_task(task_type: str, mode: str = "human"):
+    return StreamingResponse(event_generator(task_type, mode), media_type="application/x-ndjson")
 
 @app.get("/")
 async def main():

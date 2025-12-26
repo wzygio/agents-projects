@@ -21,21 +21,13 @@ class DownloadService:
     负责编排日报下载的业务流程。
     """
     
-    def __init__(self, global_config: Any):
+    def __init__(self, global_config: WebAutomationConfig):
         """
         :param global_config: 可以是全局 AppConfig 对象，也可以是字典
         """
-        # 1. 将输入转换为字典
-        if hasattr(global_config, 'model_dump'):
-            cfg_dict = global_config.model_dump()
-        elif isinstance(global_config, dict):
-            cfg_dict = global_config
-        else:
-            # 尝试把对象强转为字典 (兼容您的旧 Config 对象)
-            cfg_dict = global_config.__dict__
 
         # 2. 使用 Adapter Config 转换为内部配置对象
-        self.config = WebAutomationConfig.from_app_config(cfg_dict)
+        self.config = global_config
         self.download_dir = Path(self.config.download_dir)
         self.download_dir.mkdir(parents=True, exist_ok=True)
         

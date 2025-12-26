@@ -159,7 +159,7 @@ class WebAutomationConfig(BaseConfig):
 # 4. 全局单例 (CONFIG)
 # =============================================================================
 
-CONFIG: Optional[WebAutomationConfig] = None 
+CONFIG: Optional[WebAutomationConfig] = None
 
 def load_config() -> WebAutomationConfig | None:
     """
