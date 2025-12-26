@@ -2,8 +2,7 @@ import pandas as pd
 import numpy as np
 import logging
 from infrastructure.loader import HLDataLoader
-from packages.anomaly_monitor.src.config import load_config
-
+from packages.anomaly_monitor.src.config import AnomalyMonitorConfig
 
 logger = logging.getLogger(__name__)
 
@@ -15,8 +14,8 @@ class HLDataRepository:
     2. 负责“三表合一”的复杂业务逻辑 (复刻 Spotfire)。
     3. 修复数据互斥问题：确保 CT 和 检测站点 数据并存。
     """
-    def __init__(self):
-        self.config = load_config()
+    def __init__(self, config: AnomalyMonitorConfig):
+        self.config = config
         self.loader = HLDataLoader(self.config)
 
     def get_processed_hl_data(self) -> pd.DataFrame:

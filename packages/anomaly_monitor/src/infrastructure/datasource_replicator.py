@@ -8,12 +8,10 @@ try:
     sys.path.append(str(Path(__file__).resolve().parents[4]))
 except IndexError:
     pass 
-from packages.anomaly_monitor.src.config import load_config
+from packages.anomaly_monitor.src.config import AnomalyMonitorConfig
 
 # ================= 配置区域 =================
 # 共享盘路径 (源头)
-config = load_config()
-HL_RESOURCES_DIR = Path(str(config.paths.hl_resources_dir))
 
 # 关键文件名 (根据你的截图和日志推断)
 FILES = {
@@ -149,7 +147,9 @@ class SourceLogicReplicator:
         return df_final
 
 # --- 执行验证 ---
-replicator = SourceLogicReplicator(HL_RESOURCES_DIR)
+from packages.anomaly_monitor.src.config import load_config
+config = load_config()
+replicator = SourceLogicReplicator(config.paths.hl_resources_dir)
 df_reconstructed = replicator.run_pipeline()
 
 if df_reconstructed is not None:

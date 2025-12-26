@@ -12,26 +12,41 @@ except IndexError: pass
 # 导入基础设施层
 from infrastructure.repositories.hl_data_repository import HLDataRepository
 from infrastructure.repositories.mwdl_data_repository import MWDLDataRepository
+from infrastructure.repositories.hl_ledger_repository import HLLedgerRepository
 
 # 导入核心业务逻辑
-from packages.anomaly_monitor.src.core.hl_report_writer import HLReportWriter
+from core.hl_report_writer import HLReportWriter
 from core.concentration_analyzer import ConcentrationAnalyzer
 from core.anomaly_detector import AnomalyDetector
-from infrastructure.repositories.hl_ledger_repository import HLLedgerRepository
+from packages.anomaly_monitor.src.config import AnomalyMonitorConfig
 
 # 设置日志
 logger = logging.getLogger(__name__)
 
 class HLReportService:
-    def __init__(self):
-        self.hl_repo = HLDataRepository()
-        self.mwdl_repo = MWDLDataRepository()
+    def __init__(self, config: AnomalyMonitorConfig):
+        if config is None:
+            from packages.anomaly_monitor.src.config import load_config
+            self.config = load_config()
+        else:
+            self.config = config
+
+
+        # 链式校验：确保 self.config, daily_report 和 hl_ledger 都存在
+        if not (self.config and self.config.daily_report and self.config.daily_report.hl_ledger and self.config.daily_report.record_ledger):
+            # 统一抛出异常，提示配置链路中断
+            raise ValueError("配置错误：初始化 HLLedgerRepository 失败，请检查 self.config.daily_report.hl_ledger 是否正确配置。")
+        
+        # 校验通过，直接初始化
+        self.ledger_repo = HLLedgerRepository(self.config.daily_report.hl_ledger)
+        self.record_repo = HLLedgerRepository(self.config.daily_report.record_ledger)
+
+        self.hl_repo = HLDataRepository(self.config)
+        self.mwdl_repo = MWDLDataRepository(self.config)
         
         # Components
         self.detector: Optional[AnomalyDetector] = None
         self.writer: Optional[HLReportWriter] = None
-        self.ledger_repo = HLLedgerRepository("daily_report.hl_ledger")
-        self.record_repo = HLLedgerRepository("daily_report.record_ledger")
 
         # Data
         self.df_hl: Optional[pd.DataFrame] = None

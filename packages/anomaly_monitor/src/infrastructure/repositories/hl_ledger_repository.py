@@ -5,55 +5,54 @@ from copy import copy
 import logging
 import os
 from pathlib import Path
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Optional
 
-# 引入配置加载器
-from packages.anomaly_monitor.src.config import load_config
+# 请确保 AnomalyMonitorConfig 中定义了 LedgerConfig 类，或者它是通用的
+from packages.anomaly_monitor.src.config import LedgerConfig 
 from packages.common_utils.src.utils.misc import Utils
 
 logger = logging.getLogger(__name__)
 
 class HLLedgerRepository:
     """
-    【基础设施层】HL 台账写入仓储 (终极增强版)
+    【基础设施层】HL 台账写入仓储 (依赖注入版)
     
-    修复点：
-    1. 解决 max_row 虚高导致的“幽灵空行”问题。
-    2. 解决新写入行格式丢失问题 (自动继承上一行格式)。
-    3. 保留动态文件查找与回读验证。
+    职责：
+    1. 接收明确的配置对象，不再自己去查全局配置。
+    2. 负责向 Excel 追加记录。
     """
     
-    def __init__(self, config_key: str = "daily_report.hl_ledger"):
-        
-        self.config = load_config()
-        
-        # 1. 获取配置
-        conf = self.config.get(config_key, {})
-        if conf is None:
-            logger.warning("⚠️ 未找到 HL 台账配置，使用默认值")
-            conf = {}
+    def __init__(self, config: LedgerConfig):
+        """
+        :param config: 具体的 LedgerConfig 对象 (包含 path, sheet_name, mapping 等)
+        """
+        if not config:
+            raise ValueError("HLLedgerRepository requires a valid LedgerConfig object.")
 
-        # 动态查找文件
-        raw_path = conf.get("path")
-        file_name = conf.get("file_name") # 增加默认文件名
+        self.config = config
         
-        # 如果配置里直接给了完整路径，就尝试分离目录和文件名，或者直接用 find_latest
+        # 1. 解析路径 (Path Resolution)
+        raw_path = self.config.path
+        file_name = self.config.file_name
+        
         if raw_path:
             p = Path(raw_path)
             if p.is_file():
-                # 如果配置的就是具体文件，直接用
+                # 如果配置的是具体文件
                 self.file_path = p
             else:
-                # 如果是目录，则搜索
+                # 如果是目录，则搜索最新匹配文件
                 self.file_path = Utils.find_latest_matching_file(p, str(file_name))
         else:
             self.file_path = None
+            logger.warning("⚠️ HL Ledger Path not configured.")
 
-        self.sheet_name = conf.get("sheet_name", "Sheet1")
-        self.mapping = conf.get("mapping", {}) 
+        # 2. 解析其他参数
+        self.sheet_name = self.config.sheet_name or "Sheet1"
+        self.mapping = self.config.mapping or {}
         
         if not self.mapping:
-            logger.warning("⚠️ 未配置 HL 台账的列映射 (hl_ledger.mapping)，写入可能无法进行。")
+            logger.warning("⚠️ 未配置 HL 台账的列映射 (mapping)，写入可能无法进行。")
 
     def append_records(self, records: List[Dict]) -> Tuple[bool, str]:
         if not records:
@@ -77,8 +76,7 @@ class HLLedgerRepository:
             else:
                 ws = wb[self.sheet_name]
 
-            # 3. [修复] 计算真实的起始行 (Real Max Row)
-            # 不再盲目信任 ws.max_row，而是通过探测去除尾部空行
+            # 3. 计算真实的起始行
             real_max_row = self._get_real_max_row(ws)
             start_row = real_max_row + 1
             
@@ -101,9 +99,7 @@ class HLLedgerRepository:
                         # 4.1 写入值
                         target_cell.value = val
                         
-                        # 4.2 [修复] 格式继承 (Style Copy)
-                        # 尝试从上一行 (current_row - 1) 的同一列复制格式
-                        # 只有当上一行不是表头(行号>1)时才复制
+                        # 4.2 格式继承 (Style Copy)
                         if current_row > 2:
                             source_cell = ws[f"{col_letter}{current_row - 1}"]
                             self._copy_cell_style(source_cell, target_cell)
@@ -136,19 +132,10 @@ class HLLedgerRepository:
                 except: pass
 
     def _get_real_max_row(self, ws) -> int:
-        """
-        [辅助方法] 获取真实的最后一行数据行号
-        原理：从 openpyxl 认为的 max_row 开始倒序扫描，直到找到第一个非空行。
-        """
+        """[辅助] 获取真实的最后一行数据行号"""
         try:
-            # 如果表是空的，返回1
-            if ws.max_row <= 1:
-                return ws.max_row
-            
-            # 倒序遍历
+            if ws.max_row <= 1: return ws.max_row
             for row in range(ws.max_row, 0, -1):
-                # 检查该行所有单元格，只要有一个不是 None，就认为是有效行
-                # 注意：这里我们只检查 mapping 中涉及的列可能会更快，但全行检查更安全
                 for cell in ws[row]:
                     if cell.value is not None:
                         return row
@@ -158,10 +145,7 @@ class HLLedgerRepository:
             return ws.max_row
 
     def _copy_cell_style(self, source_cell, target_cell):
-        """
-        [辅助方法] 将源单元格的样式复制给目标单元格
-        包括：字体、边框、填充、对齐、数字格式
-        """
+        """[辅助] 复制单元格样式"""
         try:
             if source_cell.has_style:
                 target_cell.font = copy(source_cell.font)
@@ -171,11 +155,10 @@ class HLLedgerRepository:
                 target_cell.protection = copy(source_cell.protection)
                 target_cell.alignment = copy(source_cell.alignment)
         except Exception:
-            # 样式复制不是核心功能，出错了不要阻断流程
             pass
 
     def _verify_write(self, coords: str, expected_val) -> bool:
-        """回读验证 (保持不变)"""
+        """[辅助] 回读验证"""
         if not self.file_path: return False
         try:
             wb_check = openpyxl.load_workbook(self.file_path, read_only=True, data_only=True)
@@ -198,7 +181,7 @@ class HLLedgerRepository:
             return False
 
     def check_file_status(self) -> Tuple[bool, str]:
-        """检查文件状态 (保持不变)"""
+        """检查文件状态"""
         if not self.file_path: return False, "❌ 文件路径未初始化"
         if not self.file_path.exists(): return False, f"❌ 文件不存在: {self.file_path}"
         try:

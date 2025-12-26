@@ -7,16 +7,14 @@ from typing import Dict, Any
 # 1. 引入标准接口
 from packages.common_utils.src.interface.interfaces import ITaskEngine
 
-# 2. 引入本模块的配置
+# 2. 引入配置类
 from packages.anomaly_monitor.src.config import AnomalyMonitorConfig
-# [关键] 引入配置模块本身，以便注入全局 CONFIG
-import packages.anomaly_monitor.src.config as config_module 
 
 # 3. 引入核心业务
 from packages.anomaly_monitor.src.application.hl_report_service import HLReportService
 from packages.anomaly_monitor.src.application.hl_generator import AnomalyMonitorGenerator
 
-# 复用 QueueLoggingHandler (如果 common_utils 里有就 import，没有就定义)
+# 复用日志处理器
 class QueueLoggingHandler(logging.Handler):
     def __init__(self, queue: Queue):
         super().__init__()
@@ -41,26 +39,20 @@ class AnomalyMonitorAdapter(ITaskEngine):
         handler = QueueLoggingHandler(log_queue)
         logger.addHandler(handler)
         
-        # 临时捕获所有日志
         original_level = logger.level
         logger.setLevel(logging.INFO)
 
         try:
             log_queue.put("🚀 [Adapter] 异常监控引擎正在启动...")
 
-            # --- B. 配置注入 (Global Context Injection) ---
-            # 1. 将字典转为对象
+            # --- B. 配置加载 (Pure Loading) ---
+            # 1. 将字典转为强类型配置对象
             monitor_config = AnomalyMonitorConfig.from_app_config(config_dict)
-            
-            # 2. [核心技巧] 注入到模块全局变量
-            # 因为 HLReportService 内部的 Repository 可能直接使用了 config.CONFIG
-            # 我们在这里手动赋值，确保底层能拿到 Server 传来的最新配置
-            config_module.CONFIG = monitor_config
-            log_queue.put("⚙️ 全局配置上下文已注入")
+            log_queue.put("⚙️ 配置对象已构建 (Dependency Injection Ready)")
 
-            # --- C. 初始化服务 ---
-            # 实例化 Service (它会去读我们刚才注入的 Global CONFIG)
-            service = HLReportService()
+            # --- C. 初始化服务 (Dependency Injection) ---
+            # [核心修改] 直接将 config 对象注入 Service，不再修改全局变量
+            service = HLReportService(config=monitor_config)
             
             # 实例化 Generator (注入 Service)
             generator = AnomalyMonitorGenerator(service)
@@ -68,6 +60,8 @@ class AnomalyMonitorAdapter(ITaskEngine):
             # --- D. 执行核心业务 ---
             log_queue.put("🤖 调用 Generator 执行全自动流程...")
             
+            # 注意：generator.generate() 内部会调用 service 的方法
+            # 此时 service 已经持有正确的 config，不需要再去 import 全局 CONFIG
             result = generator.generate()
             
             # --- E. 处理结果 ---
@@ -89,7 +83,7 @@ class AnomalyMonitorAdapter(ITaskEngine):
         except Exception as e:
             err_msg = f"❌ [Adapter] 执行失败: {str(e)}"
             log_queue.put(err_msg)
-            # 发送堆栈信息
+            # 发送堆栈信息以便调试
             log_queue.put(f"Debug:\n{traceback.format_exc()}")
             return {
                 "status": "error",

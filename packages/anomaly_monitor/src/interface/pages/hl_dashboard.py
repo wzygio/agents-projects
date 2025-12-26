@@ -299,7 +299,9 @@ def render_dashboard(service: HLReportService):
 
 @st.cache_resource
 def _init_service_internal():
-    service = HLReportService()
+    from packages.anomaly_monitor.src.config import load_config
+    config = load_config()
+    service = HLReportService(config)
     try:
         service.load_resources()
         return service
