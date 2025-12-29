@@ -68,13 +68,13 @@ class AnomalyGenerator:
         logging.info("开始准备第二章所需的数据...")
         try:
             # [Standard 3] Type Access: 使用点号访问全局路径配置
-            paths = self.config.paths
+            path = self.config.path
             # [Global Purge] 不再依赖全局变量，从 config 提取路径
-            resources_dir = Path(paths.resources_dir)
-            cache_dir = Path(paths.data_cache_dir)
+            resources_dir = Path(path.resources_dir)
+            cache_dir = Path(path.data_cache_dir)
 
-            source_excel_filename = paths.data_source_excel_anomaly
-            dest_parquet_filename = paths.data_source_parquet_anomaly
+            source_excel_filename = path.data_source_excel_anomaly
+            dest_parquet_filename = path.data_source_parquet_anomaly
             
             # 业务逻辑配置仍使用字典访问 (来自 __init__ 的转换)
             sheet_name = str(self.cfg.get('sheet_name'))
@@ -173,11 +173,11 @@ class AnomalyGenerator:
         logging.info(f"数据共 {num_data_rows} 行，每页 {rows_per_slide} 行，共需生成 {num_slides_to_create} 个新页面。")
         
         # [Standard 3] Type Access & [Global Purge]
-        paths = self.config.paths
-        logo_filename = paths.logo_filename # 假设 Pydantic model 有此字段，或 paths.logo
+        path = self.config.path
+        logo_filename = path.logo_filename # 假设 Pydantic model 有此字段，或 path.logo
         
         # [Global Purge] 替换 DATA_RAW_DIR，使用 config 定义的路径 (通常 logo 在 resources 或 raw 目录)
-        logo_dir = Path(paths.data_raw_dir)
+        logo_dir = Path(path.data_raw_dir)
         # 检查 logo_filename 是否为 None 或非字符串类型
         if logo_filename is None:
             logging.error("logo_filename 为 None，无法构建 logo 路径")

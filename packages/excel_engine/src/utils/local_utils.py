@@ -97,7 +97,7 @@ class Utils:
         (新的私有辅助方法) 执行提取tila_target的第一步：提取产品型号列表。
         
         [重构变更] 增加 resources_dir 参数。
-        调用方需传入: config.paths.resources_dir
+        调用方需传入: config.path.resources_dir
         """
         # --- 1. 解析并验证配置 ---
         if custom_path:

@@ -291,7 +291,7 @@ class SectionMap(BaseConfig):
     model_config = {"extra": "allow"}
 
 class PptEngineConfig(BaseConfig):
-    paths: PathsConfig
+    path: PathsConfig
     settings: AppSettings
     sections: SectionMap
     

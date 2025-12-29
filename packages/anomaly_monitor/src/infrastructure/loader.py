@@ -18,8 +18,8 @@ class HLDataLoader:
     def __init__(self, config: AnomalyMonitorConfig):
         self.config = config
         # 使用 get 配合默认值，防止配置缺失导致崩溃
-        self.input_dir = Path(self.config.paths.hl_resources_dir)
-        self.cache_dir = Path(self.config.paths.data_cache_path)
+        self.input_dir = Path(self.config.path.hl_resources_dir)
+        self.cache_dir = Path(self.config.path.data_cache_path)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
     def load_raw_dataframe(self, file_key: str) -> pd.DataFrame:

@@ -5,13 +5,6 @@ from pathlib import Path
 from typing import Optional, Dict, Any
 from pydantic import BaseModel
 
-# 导入各模块的配置定义 (各模块自己维护自己的 Config 类)
-from packages.anomaly_monitor.src import config as anomaly_monitor_config_module
-from packages.web_automation.src import config as web_config_module
-from packages.excel_engine.src import config as excel_config_module
-from packages.ppt_engine.src import config as ppt_config_module
-
-
 # 为了 Pydantic 定义，我们需要具体的类
 from packages.anomaly_monitor.src.config import AnomalyMonitorConfig
 from packages.web_automation.src.config import WebAutomationConfig
@@ -49,7 +42,7 @@ class AppConfig(BaseConfig):
     它将包含所有子模块的配置对象。
     """
     common: CommonConfig
-    paths: PathConfig
+    path: PathConfig
     
     # 子模块配置 (通过 includes 动态加载后注入)
     anomaly_monitor: Optional[AnomalyMonitorConfig] = None
@@ -64,8 +57,7 @@ _config_instance: Optional[AppConfig] = None
 
 # 自动定位项目根目录
 try:
-    # src/config.py -> parent is src -> parent is project_root
-    PROJECT_ROOT = Path(__file__).resolve().parents[1]
+    PROJECT_ROOT = Path(__file__).resolve().parents[2]
 except NameError:
     PROJECT_ROOT = Path.cwd()
 
@@ -120,19 +112,18 @@ def load_config(yaml_path: str = "config/config.yaml") -> AppConfig:
         raw_data = _merge_config_files(full_path)
         
         # 2. 使用工厂方法实例化子模块配置
-        # 这让子模块有机会从 raw_data 中读取全局字段(如 paths)
-        
-        if 'ppt_engine' in raw_data:
-            raw_data['ppt_engine'] = PptEngineConfig.from_app_config(raw_data)
-        
+        # 这让子模块有机会从 raw_data 中读取全局字段(如 path)
+        if 'anomaly_monitor' in raw_data:
+             raw_data['anomaly_monitor'] = AnomalyMonitorConfig.from_app_config(raw_data)
+
         if 'web_automation' in raw_data:
             raw_data['web_automation'] = WebAutomationConfig.from_app_config(raw_data)
-            
+
         if 'excel_engine' in raw_data:
             raw_data['excel_engine'] = ExcelEngineConfig.from_app_config(raw_data)
 
-        if 'anomaly_monitor' in raw_data:
-             raw_data['anomaly_monitor'] = AnomalyMonitorConfig.from_app_config(raw_data)
+        if 'ppt_engine' in raw_data:
+            raw_data['ppt_engine'] = PptEngineConfig.from_app_config(raw_data)
 
         # 3. 创建对象
         _config_instance = AppConfig(**raw_data)

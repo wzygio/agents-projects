@@ -25,7 +25,7 @@ class ReportGenerator:
         self.excel_handler = None
         
         # [标准 4] 显式传入 resources_dir
-        self.resources_dir = Path(self.config.paths.resources_dir)
+        self.resources_dir = Path(self.config.path.resources_dir)
         model_defs_dict = self.config.model_definitions.model_dump()
         self.product_models = Utils.extract_product_models(
             model_defs_dict, 

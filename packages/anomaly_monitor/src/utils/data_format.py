@@ -13,7 +13,7 @@ from packages.anomaly_monitor.src.config import load_config
 # ================= 配置区域 =================
 # 你的数据目录
 config = load_config()
-HL_RESOURCES_DIR = Path(str(config.paths.hl_resources_dir))
+HL_RESOURCES_DIR = Path(str(config.path.hl_resources_dir))
 DATA_RAW_DIR = Path(str(config.get("path.data_raw_dir")))
 
 # 定义源文件 (xlsx) 和目标文件 (parquet)

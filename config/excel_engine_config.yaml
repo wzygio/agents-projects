@@ -1,7 +1,7 @@
 # 配置文件：config\excel_engine_config.yaml
 
 # 项目路径配置
-paths:
+path:
   base_dir: 'D:/wzy/Python/excel-generator-project'  # 项目根目录（相对路径）
   resources_dir: 'resources'  # 数据文件夹路径
   temp_dir: 'data/temp'  # 临时文件夹路径

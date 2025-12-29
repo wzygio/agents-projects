@@ -37,7 +37,7 @@ class FontProcessor:
         self.batch_jobs = self.config.font_processing_jobs
         
         # 获取临时目录路径
-        self.temp_dir = Path(self.config.paths.temp_dir) 
+        self.temp_dir = Path(self.config.path.temp_dir) 
         
         try:
             shutil.copy(self.template_path, self.output_path)

@@ -33,7 +33,7 @@ class RiskControlSectionGenerator:
         
         # 从传入的config中，安全地获取本章节的配置字典
         self.cfg = self.config.sections.risk_control
-        self.paths_cfg = self.config.paths
+        self.paths_cfg = self.config.path
 
 
         self.processed_data: Dict[str, Any] = {}
@@ -131,7 +131,7 @@ class RiskControlSectionGenerator:
         num_slides_to_create = math.ceil(num_data_rows / rows_per_slide)
         logging.info(f"数据共 {num_data_rows} 行，每页 {rows_per_slide} 行，共需生成 {num_slides_to_create} 个新页面。")
         
-        self.paths_cfg = self.config.get('paths', {})
+        self.paths_cfg = self.config.get('path', {})
         if self.paths_cfg is None:
             logging.error("路径配置为空，请检查config。")
             return

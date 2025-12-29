@@ -315,7 +315,7 @@ class ReportTextTemplates(BaseConfig):
 # =============================================================================
 
 class ExcelEngineConfig(BaseConfig):
-    paths: PathsConfig
+    path: PathsConfig
     style_definitions: StyleDefinitionsConfig
     model_definitions: ModelDefinitionsConfig
     exception_processing_jobs: List[ExceptionJobConfig]
@@ -340,12 +340,12 @@ class ExcelEngineConfig(BaseConfig):
             
             # [Context Injection] 注入全局路径 (可选)
             # 如果全局配置里有 path.output，且子模块未定义，则覆盖
-            if 'path' in app_config_dict and 'paths' in excel_data:
+            if 'path' in app_config_dict and 'path' in excel_data:
                  global_paths = app_config_dict['path']
                  # 示例：确保 log_dir 跟随全局
                  if 'logs' in global_paths:
                       # 只有在 excel 配置没有显式指定时才覆盖，或者强制覆盖
-                      # excel_data['paths']['log_dir'] = global_paths['logs']
+                      # excel_data['path']['log_dir'] = global_paths['logs']
                       pass
 
             return cls(**excel_data)

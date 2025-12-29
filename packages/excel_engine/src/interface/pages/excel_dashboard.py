@@ -63,11 +63,11 @@ with st.sidebar:
     if st.button("📥 下载最新数据文件", use_container_width=True):
         
         # [Type Access] 通过配置对象实例访问路径
-        downloader_script = Path(cfg.paths.downloader_script_path)
-        python_exec = Path(cfg.paths.downloader_python_executable)
+        downloader_script = Path(cfg.path.downloader_script_path)
+        python_exec = Path(cfg.path.downloader_python_executable)
         
         # 如果路径是相对路径，需要基于项目根目录解析（假设 cfg 中有 project_root 或自行解析）
-        # 这里假设 cfg.paths 返回的是绝对路径或已正确处理的 Path 对象
+        # 这里假设 cfg.path 返回的是绝对路径或已正确处理的 Path 对象
         
         with st.spinner("正在运行下载脚本..."):
             if not downloader_script.exists():
@@ -106,8 +106,8 @@ with tab1:
     st.header("生成基础日报")
     
     # [Type Access] 从 cfg 实例获取默认模板路径
-    default_template_path = Path(cfg.paths.template_file)
-    default_temp_output = Path(cfg.paths.temp_file)
+    default_template_path = Path(cfg.path.template_file)
+    default_temp_output = Path(cfg.path.temp_file)
     
     st.info(f"默认模板路径: {default_template_path}")
     
@@ -167,7 +167,7 @@ with tab2:
     st.header("渲染日报样式")
     
     # 重新获取路径引用（为了代码局部性，也可直接复用上面的变量）
-    default_temp_output = Path(cfg.paths.temp_file)
+    default_temp_output = Path(cfg.path.temp_file)
     
     uploaded_intermediate_file = st.file_uploader("📥 上传日报文件", type=['xlsx'], key="intermediate_uploader")
     

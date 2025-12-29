@@ -87,8 +87,8 @@ class YieldDataSectionGenerator:
         logger.info("开始准备第一章所需的数据...")
 
         # 1. 查找Excel文件
-        # 使用 self.config.paths 替代 config.get('paths')
-        self.paths_cfg = self.config.paths
+        # 使用 self.config.path 替代 config.get('path')
+        self.paths_cfg = self.config.path
         
         # 显式拼接路径，消除全局变量依赖
         project_root = Path(self.paths_cfg.base_dir) if self.paths_cfg.base_dir else Path.cwd()

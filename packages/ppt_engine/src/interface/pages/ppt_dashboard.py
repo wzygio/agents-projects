@@ -16,8 +16,8 @@ from packages.ppt_engine.src.interface.components.app_setup import AppSetup
 config = load_config()
 
 # 为了代码简洁，提取一些常用路径
-RESOURCES_DIR = Path(config.paths.resources_dir)
-OUTPUT_DIR = Path(config.paths.output_dir)
+RESOURCES_DIR = Path(config.path.resources_dir)
+OUTPUT_DIR = Path(config.path.output_dir)
 
 # 初始化日志记录器
 logger = logging.getLogger("PPTDashboard")
@@ -39,7 +39,7 @@ with st.sidebar:
     st.subheader("全局设置")
     
     # 绑定 config 对象的属性
-    output_filename = st.text_input("1. 输出PPT文件名", value=config.paths.output_ppt)
+    output_filename = st.text_input("1. 输出PPT文件名", value=config.path.output_ppt)
     
     # 时间逻辑
     now = datetime.datetime.now()
@@ -99,14 +99,14 @@ if generate_button:
         if template_source == "手动上传新模板":
             if uploaded_template_file:
                 saved_path = AppSetup.save_uploaded_file(uploaded_template_file, RESOURCES_DIR)
-                # 更新 config 对象中的 paths 属性
-                # 注意：这里假设 config.paths.template_ppt_source 是一个 DataSourceItem 对象
+                # 更新 config 对象中的 path 属性
+                # 注意：这里假设 config.path.template_ppt_source 是一个 DataSourceItem 对象
                 # 如果它不存在，我们需要构造一个
                 # 为简化逻辑，我们直接修改 data_sources 列表中的 main_template 项
                 
                 # 寻找 main_template 项并修改
                 found = False
-                for item in config.paths.data_sources:
+                for item in config.path.data_sources:
                     if item.key_name == 'main_template':
                         item.source_type = 'upload'
                         item.path = str(saved_path)
@@ -131,8 +131,8 @@ if generate_button:
         for section_key, config_key_name in excel_uploads_map.items():
             uploaded_file = uploaded_files.get(section_key)
             
-            # 在 config.paths.data_sources 中找到对应的项
-            target_item = next((item for item in config.paths.data_sources if item.key_name == config_key_name), None)
+            # 在 config.path.data_sources 中找到对应的项
+            target_item = next((item for item in config.path.data_sources if item.key_name == config_key_name), None)
             
             if target_item:
                 if uploaded_file:
@@ -149,7 +149,7 @@ if generate_button:
                          target_item.source_type = 'network' # 回退
 
         # --- 3. 更新其他运行时参数 ---
-        config.paths.output_ppt = output_filename
+        config.path.output_ppt = output_filename
         
         # 更新日期 (假设在 sections.anomaly_management 下有 specific_date)
         if config.sections.anomaly_management:

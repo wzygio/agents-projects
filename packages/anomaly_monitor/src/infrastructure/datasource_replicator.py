@@ -149,7 +149,7 @@ class SourceLogicReplicator:
 # --- 执行验证 ---
 from packages.anomaly_monitor.src.config import load_config
 config = load_config()
-replicator = SourceLogicReplicator(config.paths.hl_resources_dir)
+replicator = SourceLogicReplicator(config.path.hl_resources_dir)
 df_reconstructed = replicator.run_pipeline()
 
 if df_reconstructed is not None:

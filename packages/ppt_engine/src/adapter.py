@@ -70,7 +70,7 @@ class PPTEngineAdapter(ITaskEngine):
             
             # --- D. 结果构建 ---
             # 从 config 对象中获取输出路径 (Generator 会更新 config 中的路径)
-            output_path = generator.output_dir / generator.config.paths.output_ppt
+            output_path = generator.output_dir / generator.config.path.output_ppt
             
             log_queue.put(f"✅ PPT 生成完毕! 文件路径: {output_path.name}")
             

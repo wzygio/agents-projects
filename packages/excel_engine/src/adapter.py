@@ -47,26 +47,26 @@ class ExcelEngineAdapter(ITaskEngine):
 
             # --- B. 加载配置 ---
             excel_config = ExcelEngineConfig.from_app_config(config_dict)
-            paths = excel_config.paths
+            path = excel_config.path
 
             # --- C. 路径准备 (Path Resolution) ---
             # 确定项目根目录 (优先使用配置中的 base_dir，否则用当前工作目录)
-            project_root = Path(paths.base_dir) if paths.base_dir else Path.cwd()
+            project_root = Path(path.base_dir) if path.base_dir else Path.cwd()
 
             # 1. 输入：模板文件
-            template_path = project_root / paths.resources_dir / paths.template_file
+            template_path = project_root / path.resources_dir / path.template_file
             if not template_path.exists():
                 raise FileNotFoundError(f"模板文件未找到: {template_path}")
 
             # 2. 中间态：临时文件 (用于连接 Content 和 Style 两个步骤)
-            temp_dir = project_root / paths.temp_dir
+            temp_dir = project_root / path.temp_dir
             temp_dir.mkdir(parents=True, exist_ok=True)
-            temp_path = temp_dir / paths.temp_file
+            temp_path = temp_dir / path.temp_file
 
             # 3. 输出：最终文件
-            output_dir = project_root / paths.output_dir
+            output_dir = project_root / path.output_dir
             output_dir.mkdir(parents=True, exist_ok=True)
-            final_path = output_dir / paths.output_file
+            final_path = output_dir / path.output_file
 
             log_queue.put(f"📂 路径解析完成:\n  - 模板: {template_path.name}\n  - 临时: {temp_path.name}\n  - 输出: {final_path.name}")
 

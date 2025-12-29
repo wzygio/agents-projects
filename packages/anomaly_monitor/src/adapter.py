@@ -1,6 +1,5 @@
 import logging
 import traceback
-import sys
 from queue import Queue
 from typing import Dict, Any
 

@@ -33,8 +33,8 @@ class ExceptionProcessor:
         self.intermediate_data = {} 
         
         # 显式获取路径 (利用 Pydantic 的强类型)
-        self.cache_dir = Path(self.config.paths.temp_dir)
-        self.resources_dir = Path(self.config.paths.resources_dir)
+        self.cache_dir = Path(self.config.path.temp_dir)
+        self.resources_dir = Path(self.config.path.resources_dir)
 
         # 准备 Utils 所需的字典参数
         model_defs_dict = self.config.model_definitions.model_dump()

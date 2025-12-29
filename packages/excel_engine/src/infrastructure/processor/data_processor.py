@@ -30,9 +30,9 @@ class DataProcessor:
         self.external_data = external_data or {}
         
         # [重构 2] 显式获取并存储关键路径，供后续调用 Utils 使用
-        # 假设 config.paths 已经是一个 PathConfig 对象
-        self.resources_dir = Path(self.config.paths.resources_dir)
-        self.cache_dir = Path(self.config.paths.temp_dir) # 注意：这里使用 temp_dir 作为缓存目录
+        # 假设 config.path 已经是一个 PathConfig 对象
+        self.resources_dir = Path(self.config.path.resources_dir)
+        self.cache_dir = Path(self.config.path.temp_dir) # 注意：这里使用 temp_dir 作为缓存目录
 
         # [重构 3] 调用 Utils 时传入 resources_dir
         # 注意：model_definitions 需要转为字典供 Utils 使用

@@ -43,7 +43,7 @@ class PPTGenerator:
         
         # 2. [Path Setup] 基于注入的配置提取路径
         # 注意：这里假设传入的 config 对象已经是处理过基础路径的 Pydantic 模型
-        paths_cfg = self.config.paths
+        paths_cfg = self.config.path
         self.canvas_processor = CanvasPreprocessor(self.config)
 
         if not paths_cfg.base_dir:
@@ -128,7 +128,7 @@ class PPTGenerator:
     def _resolve_all_data_sources(self):
         """遍历配置中的数据源，确保所有文件都在本地资源目录就绪"""
         logging.info("--- 开始同步数据源文件 ---")
-        paths_cfg = self.config.paths
+        paths_cfg = self.config.path
         
         for source_item in paths_cfg.data_sources:
             try:
@@ -201,20 +201,20 @@ class PPTGenerator:
         logging.info("--- 初始化画布 ---")
         
         self.template_filename = ""
-        for item in self.config.paths.data_sources:
+        for item in self.config.path.data_sources:
             if item.key_name == 'main_template':
                 self.template_filename = item.filename
                 if self.template_filename.startswith('~$'):
                     self.template_filename = self.template_filename[2:]
                 break
         
-        if not self.template_filename and self.config.paths.output_template_ppt:
-             self.template_filename = self.config.paths.output_template_ppt
+        if not self.template_filename and self.config.path.output_template_ppt:
+             self.template_filename = self.config.path.output_template_ppt
 
         if not self.template_filename:
             raise ValueError("无法确定主模板文件名")
 
-        self.config.paths.output_template_ppt = self.template_filename
+        self.config.path.output_template_ppt = self.template_filename
         template_path = self.resources_dir / self.template_filename
         
         if not template_path.exists():
@@ -283,7 +283,7 @@ class PPTGenerator:
 
     def _save_presentation(self):
         """保存生成的PPT文件"""
-        output_filename = self.config.paths.output_ppt
+        output_filename = self.config.path.output_ppt
         output_path = self.output_dir / output_filename
         
         logging.info(f"正在保存 PPT 至: {output_path}")

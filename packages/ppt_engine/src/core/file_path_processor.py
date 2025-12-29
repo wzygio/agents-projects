@@ -12,7 +12,7 @@ def _find_monthly_template_dir(config: dict) -> tuple[Path, str]:
     2. 如果不存在则查找上个月的文件夹（如 2024/04月）
     3. 返回格式：(Path("公共盘路径/2024/05月"), "2024/05月")
     """
-    paths_cfg = config.get('paths', {})  # 获取配置中的路径信息
+    paths_cfg = config.get('path', {})  # 获取配置中的路径信息
     network_base_dir = Path(paths_cfg.get('network_source_dir'))  # 公共盘基础路径
     report_base_dir_name = paths_cfg.get('daily_report_template', {}).get('base_dir')  # 模板基础目录
     full_base_path = network_base_dir / report_base_dir_name  # 完整基础路径
@@ -86,7 +86,7 @@ def process_dynamic_settings(config: Any) -> Any:
         found_filename = _find_daily_template_file(config, found_dir_path)
 
         # 3. 在data_sources列表中找到主模板条目并用【纯粹的字符串】更新它
-        data_sources = config.get('paths', {}).get('data_sources', [])
+        data_sources = config.get('path', {}).get('data_sources', [])
         for item in data_sources:
             if item.get('key_name') == 'main_template':  # 找到主模板配置项
                 item['filename'] = found_filename  # 更新文件名
@@ -98,9 +98,9 @@ def process_dynamic_settings(config: Any) -> Any:
         logging.warning(f"UI_WARNING: 动态模板查找失败 ({e})，将尝试使用本地后备文件。")
         # 即使公共盘查找失败，依然要填充预期的文件名，供本地后备逻辑使用
         today = date.today()
-        filename_format = config.get('paths', {}).get('daily_report_template', {}).get('filename_format')
+        filename_format = config.get('path', {}).get('daily_report_template', {}).get('filename_format')
         expected_filename = filename_format.format(date=today.strftime('%m%d'))
-        for item in config.get('paths', {}).get('data_sources', []):
+        for item in config.get('path', {}).get('data_sources', []):
             if item.get('key_name') == 'main_template':  # 找到主模板配置项
                 item['filename'] = expected_filename  # 使用预期文件名
                 item['network_subdir'] = ''  # 清空子目录路径（表示使用默认路径）

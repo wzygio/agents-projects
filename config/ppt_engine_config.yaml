@@ -3,7 +3,7 @@
 # =======================================================
 # A. 全局路径配置
 # =======================================================
-paths:
+path:
   base_dir: 'D:/wzy/Python/agents-projects'
   resources_dir: 'resources' # 本地数据源
   data_cache_dir: 'data/cache' # 数据缓存目录

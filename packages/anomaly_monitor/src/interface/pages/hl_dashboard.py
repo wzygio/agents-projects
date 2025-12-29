@@ -237,10 +237,14 @@ def render_dashboard(service: HLReportService):
                 
                 # 3. [核心修复] 兜底生成逻辑 (含孪生站点查找)
                 if not ai_draft or pd.isna(ai_draft) or str(ai_draft).strip() == "":
-                    ai_draft = service.generator.generate_text( # type: ignore
-                        raw_row, 
-                        full_df=service.df_hl # 👈 关键：复用 Service 中的全量数据
-                    )
+                    if service.writer is not None:
+                        ai_draft = service.writer.generate_text( 
+                            row=raw_row, 
+                            full_df=service.df_hl # 👈 关键：复用 Service 中的全量数据
+                        )
+                    else:
+                        st.error("生成报告时发生错误：未初始化报告生成器")
+                        logger.error("Report writer not initialized")
                     
                 # 4. 标题展示
                 header_text = f"📄 {prod} - {defect} ({station})"

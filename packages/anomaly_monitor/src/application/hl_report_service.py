@@ -91,7 +91,6 @@ class HLReportService:
             logger.warning("⚠️ HL数据未加载或为空，无法执行批量检测")
             return
 
-
         logger.info("🕵️‍♂️ [Service] 开始批量执行判定与报告生成...")
         
         # 结果容器
