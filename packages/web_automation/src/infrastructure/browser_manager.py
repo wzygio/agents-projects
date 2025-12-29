@@ -1,6 +1,7 @@
 import logging
 from playwright.sync_api import sync_playwright, Page, Browser, BrowserContext, Playwright
 from typing import Optional
+
 from packages.web_automation.src.config import BrowserConfig
 
 class BrowserManager:

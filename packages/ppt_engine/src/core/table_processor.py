@@ -9,6 +9,7 @@ from lxml import etree # type: ignore
 from pptx.util import Inches, Pt
 from pptx.dml.color import RGBColor
 from pptx.oxml.xmlchemy import OxmlElement
+
 from packages.ppt_engine.src.config import TableBaseLayout, TableLayoutConfig
 
 

@@ -2,7 +2,6 @@ import sys
 import logging
 from pathlib import Path
 
-from src.config import config
 
 def setup_logging(log_filename: str = "app.log", log_dir: Path = Path("logs")):
     """

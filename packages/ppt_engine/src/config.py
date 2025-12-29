@@ -3,10 +3,15 @@ from pathlib import Path
 from typing import List, Dict, Optional, Any, Union, Literal
 import yaml
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
 from pptx.dml.color import RGBColor
 
-from src.config import PROJECT_ROOT
+try:
+    # 假设结构: project_root/packages/ppt_engine/src/config.py
+    # parents[0]=src, parents[1]=ppt_engine, parents[2]=packages, parents[3]=project_root
+    PROJECT_ROOT = Path(__file__).resolve().parents[3]
+except NameError:
+    PROJECT_ROOT = Path.cwd()
 
 # =============================================================================
 # 1. 基础工具与布局计算器 (Infrastructure Logic)
@@ -140,7 +145,7 @@ class PathsConfig(BaseConfig):
     data_raw_dir: str
     log_dir: str
     output_dir: str
-    output_ppt: str
+    output_ppt:  str
     output_template_ppt: str
     main_py_path: str
     # 数据源快捷键
@@ -166,6 +171,7 @@ class ElementLayout(BaseConfig):
     font_name: Optional[str] = None
     fill_color: ColorType = None
     placeholder_name: Optional[str] = None
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     @field_validator('fill_color', mode='before')
     def validate_color(cls, v): return convert_color(v)
@@ -194,16 +200,26 @@ class LocatorRule(BaseConfig):
     section_data: Optional[Dict[str, int]] = None
 
 class YieldDataLocators(BaseConfig):
+    """
+    [修正] 仅包含 YAML 中 locators 下的字段
+    """
     yield_trend_sheet: LocatorRule
     control_plan_sheet: LocatorRule
-    excel_sections: Dict[str, List[int]]
-    categories_titles: Dict[str, str]
+    # 删除了 excel_sections 和 categories_titles，因为它们在 YAML 中不在这里
 
 class YieldDataConfig(BaseConfig):
+    """
+    [修正] 将 excel_sections 和 categories_titles 提升到这里
+    因为 YAML 中它们是 data_config 的直接子项，与 locators 同级
+    """
     ppt_target_slides: List[int]
     sheet_names: Dict[str, str]
     categories: List[str]
     locators: YieldDataLocators
+    
+    # 从 Locators 移到这里，与 YAML 结构保持一致
+    excel_sections: Dict[str, List[int]]
+    categories_titles: Dict[str, str]
 
 # --- Table Calculation Params (Complex) ---
 class CalculationParams(BaseConfig):
@@ -313,7 +329,7 @@ class PptEngineConfig(BaseConfig):
         logging.warning("No global config found. Switching to Standalone Mode.") # 警告提示
         
         # 定义本地测试配置文件的路径
-        local_test_config = Path(__file__).parents[3] / "config" / "ppt_engine_config.yaml" # 定位文件
+        local_test_config = PROJECT_ROOT / "config" / "ppt_engine_config.yaml" # 定位文件
         
         if local_test_config.exists():
             logging.info(f"Loading local dev config: {local_test_config}") # 记录加载动作

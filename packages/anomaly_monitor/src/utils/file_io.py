@@ -1,6 +1,5 @@
 import pandas as pd
 from pathlib import Path
-import os
 from packages.anomaly_monitor.src.config import load_config
 
 class FileAdapter:

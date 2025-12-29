@@ -9,7 +9,7 @@ from pathlib import Path
 # --- 1. 仅导入类型定义或工厂，绝不导入全局实例 ---
 # [Global Purge] 移除 'config' 对象导入，改为导入配置类定义
 from packages.excel_engine.src.config import load_config
-from interface.components.app_utils import AppUtils
+from packages.excel_engine.src.interface.components.app_utils import AppUtils
 
 # --- 2. 导入核心业务逻辑 (Use Cases) ---
 from packages.excel_engine.src.application.report_genrator import GenerateReportUseCase

@@ -2,7 +2,10 @@
 common:
   log_level: 'INFO'
   HEADLESS_MODE: True
-  
+
+path:
+  base_dir: '.'
+
 # --- 浏览器基础设施 ---
 browser:
   headless: false

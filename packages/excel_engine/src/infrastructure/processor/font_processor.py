@@ -8,8 +8,9 @@ from typing import TYPE_CHECKING, Optional, List, Dict, Any
 from openpyxl import load_workbook
 from xml.etree import ElementTree as ET
 
-from utils.local_utils import Utils 
-from core.text_parser import default_text_parser
+from packages.excel_engine.src.utils.local_utils import Utils
+from packages.excel_engine.src.core.text_parser import default_text_parser
+
 # [Standard 1 & 4] Global Purge & Import Rules
 # 移除全局变量导入: from packages.excel_engine.src.config import TEMP_DIR 
 if TYPE_CHECKING:

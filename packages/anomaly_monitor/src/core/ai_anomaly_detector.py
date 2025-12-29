@@ -9,7 +9,7 @@ from crewai import Agent, Task, Crew, Process
 from langchain_openai import ChatOpenAI
 
 # 引入之前的集中性分析器
-from .concentration_analyzer import ConcentrationAnalyzer
+from packages.anomaly_monitor.src.core.concentration_analyzer import ConcentrationAnalyzer
 
 logger = logging.getLogger(__name__)
 

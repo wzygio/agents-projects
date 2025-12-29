@@ -3,11 +3,12 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 import logging, yaml
 
-def get_project_root() -> Path:
-    """Returns project root folder."""
-    return Path(__file__).resolve().parents[3]
-
-PROJECT_ROOT = get_project_root()
+try:
+    # 假设结构: project_root/packages/ppt_engine/src/config.py
+    # parents[0]=src, parents[1]=ppt_engine, parents[2]=packages, parents[3]=project_root
+    PROJECT_ROOT = Path(__file__).resolve().parents[3]
+except NameError:
+    PROJECT_ROOT = Path.cwd()
 
 # =============================================================================
 # 1. 基础配置基类 (复用您的方案一魔法)
@@ -178,12 +179,10 @@ class WebAutomationConfig(BaseConfig):
         logging.warning("[WebAutomation] No valid global config context. Switching to Standalone Mode.")
 
         # 1. 定位配置文件
-        # 假设结构: packages/web_automation/config/web_automation_config.yaml
+        # 假设结构: config/web_automation_config.yaml
         try:
-            # __file__ = packages/web_automation/src/config.py
-            # parents[2] = packages/web_automation
-            base_dir = Path(__file__).resolve().parents[2]
-            local_config_path = base_dir / "config" / "web_automation_config.yaml"
+            # 1.1 尝试从项目根目录加载
+            local_config_path = PROJECT_ROOT / "config" / "web_automation_config.yaml"
         except (NameError, IndexError):
             # 兜底：假设在当前目录运行
             local_config_path = Path("config/web_automation_config.yaml")

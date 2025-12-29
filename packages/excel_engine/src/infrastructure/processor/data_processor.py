@@ -9,7 +9,7 @@ from typing import Dict, List, Any, Optional
 import openpyxl
 
 # 导入工具类
-from utils.local_utils import Utils
+from packages.excel_engine.src.utils.local_utils import Utils
 
 # 导入配置类型用于 Type Hinting (仅用于类型检查，不用于运行时逻辑)
 from typing import TYPE_CHECKING

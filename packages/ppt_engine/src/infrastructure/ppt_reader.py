@@ -8,7 +8,7 @@ import pandas as pd
 from pptx import Presentation
 from pptx.shapes.graphfrm import GraphicFrame
 
-from utils.local_utils import Utils
+from packages.ppt_engine.src.utils.local_utils import Utils
 
 # [Standard 4] Import Standard: 使用 TYPE_CHECKING 防止循环依赖
 if TYPE_CHECKING:

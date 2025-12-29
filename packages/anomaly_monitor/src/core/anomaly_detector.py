@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 import logging
-from .concentration_analyzer import ConcentrationAnalyzer
+from packages.anomaly_monitor.src.core.concentration_analyzer import ConcentrationAnalyzer
 
 logger = logging.getLogger(__name__)
 

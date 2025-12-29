@@ -20,6 +20,7 @@ data:
 
 path:
   # 输入和缓存路径
+  base_dir: '.'
   input_path: 'D:/wzy/Python/agents-projects/data/input'
   data_cache_path: 'D:/wzy/Python/agents-projects/data/cache'
   data_raw_dir: 'D:/wzy/Python/agents-projects/data/raw'

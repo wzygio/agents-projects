@@ -1,9 +1,15 @@
-import os
 import logging
 import yaml
 from typing import List, Dict, Optional, Any
 from pathlib import Path
 from pydantic import BaseModel, Field
+
+try:
+    # 假设结构: project_root/packages/ppt_engine/src/config.py
+    # parents[0]=src, parents[1]=ppt_engine, parents[2]=packages, parents[3]=project_root
+    PROJECT_ROOT = Path(__file__).resolve().parents[3]
+except NameError:
+    PROJECT_ROOT = Path.cwd()
 
 # =============================================================================
 # 1. 基础配置基类
@@ -154,8 +160,7 @@ class AnomalyMonitorConfig(BaseConfig):
         
         # 路径定位：packages/anomaly_monitor/src/config.py -> parents[2]
         try:
-            package_root = Path(__file__).resolve().parents[2]
-            local_config_path = package_root / "config" / "anomaly_monitor.yaml"
+            local_config_path = PROJECT_ROOT / "config" / "anomaly_monitor.yaml"
         except (NameError, IndexError):
             local_config_path = Path("config/anomaly_monitor.yaml")
 

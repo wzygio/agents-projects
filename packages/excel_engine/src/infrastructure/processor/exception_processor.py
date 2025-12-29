@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Optional, Dict, Any, List
 
 # 导入工具类
-from utils.local_utils import Utils
+from packages.excel_engine.src.utils.local_utils import Utils
 
 # [标准 1] 使用 TYPE_CHECKING 解决循环导入，同时保留 IDE 智能提示
 from typing import TYPE_CHECKING

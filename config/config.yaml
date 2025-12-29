@@ -8,7 +8,7 @@ common:
   headless_mode: true  # 全局默认
 
 path:
-  base_dir: "."
+  base_dir: '.'
   input: "data/input"
   output: "output"
   logs: "logs"

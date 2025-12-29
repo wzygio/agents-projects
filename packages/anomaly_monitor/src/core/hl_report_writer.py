@@ -4,7 +4,7 @@ import pandas as pd
 from typing import Optional
 
 # 引入类型用于 Type Hint
-from core.concentration_analyzer import ConcentrationAnalyzer
+from packages.anomaly_monitor.src.core.concentration_analyzer import ConcentrationAnalyzer
 logger = logging.getLogger(__name__)
 
 class HLReportWriter:

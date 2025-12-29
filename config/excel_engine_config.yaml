@@ -2,7 +2,7 @@
 
 # 项目路径配置
 path:
-  base_dir: 'D:/wzy/Python/excel-generator-project'  # 项目根目录（相对路径）
+  base_dir: '.'  # 项目根目录（相对路径）
   resources_dir: 'resources'  # 数据文件夹路径
   temp_dir: 'data/temp'  # 临时文件夹路径
   log_dir: 'logs'  # 日志文件夹路径
@@ -335,6 +335,7 @@ report_generator_jobs:
     target_cells:
       start_cell: "D4"            # 报告写入的起始单元格
       step: 4                     # 写入的步长
+      end_row: 60                   # 写入的结束行
  
 # --- 4. 字体样式任务批量处理定义 (Batch Processing Jobs) ---
 font_processing_jobs:

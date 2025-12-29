@@ -10,14 +10,14 @@ try:
 except IndexError: pass
 
 # 导入基础设施层
-from infrastructure.repositories.hl_data_repository import HLDataRepository
-from infrastructure.repositories.mwdl_data_repository import MWDLDataRepository
-from infrastructure.repositories.hl_ledger_repository import HLLedgerRepository
+from packages.anomaly_monitor.src.infrastructure.repositories.hl_data_repository import HLDataRepository
+from packages.anomaly_monitor.src.infrastructure.repositories.mwdl_data_repository import MWDLDataRepository
+from packages.anomaly_monitor.src.infrastructure.repositories.hl_ledger_repository import HLLedgerRepository
 
 # 导入核心业务逻辑
-from core.hl_report_writer import HLReportWriter
-from core.concentration_analyzer import ConcentrationAnalyzer
-from core.anomaly_detector import AnomalyDetector
+from packages.anomaly_monitor.src.core.hl_report_writer import HLReportWriter
+from packages.anomaly_monitor.src.core.concentration_analyzer import ConcentrationAnalyzer
+from packages.anomaly_monitor.src.core.anomaly_detector import AnomalyDetector
 from packages.anomaly_monitor.src.config import AnomalyMonitorConfig
 
 # 设置日志

@@ -5,6 +5,13 @@ from typing import List, Dict, Optional, Any, Union
 from pathlib import Path
 from pydantic import BaseModel, Field, model_validator
 
+try:
+    # 假设结构: project_root/packages/ppt_engine/src/config.py
+    # parents[0]=src, parents[1]=ppt_engine, parents[2]=packages, parents[3]=project_root
+    PROJECT_ROOT = Path(__file__).resolve().parents[3]
+except NameError:
+    PROJECT_ROOT = Path.cwd()
+
 # =============================================================================
 # 1. 基础配置类 (终极兼容版)
 # =============================================================================
@@ -76,7 +83,7 @@ class CellSequence(BaseConfig):
     """单元格序列遍历配置"""
     start_cell: str
     step: int
-    end_row: int
+    end_row: Optional[int] = None
 
 class ModuleDefinition(BaseConfig):
     """模块定义 (用于分块提取)"""
@@ -352,15 +359,11 @@ class ExcelEngineConfig(BaseConfig):
 
         # --- 模式二：独立/调试模式 (Standalone Mode) ---
         logging.warning("[ExcelEngine] No global config context. Switching to Standalone Mode.")
-        
         # 定位逻辑：当前文件在 packages/excel_engine/src/config.py
-        # 目标 YAML 在 packages/excel_engine/config/excel_engine_config.yaml (假设结构)
-        # 或者在项目根目录 config/excel_engine_config.yaml
-        
-        # 这里使用与 PPT Engine 一致的逻辑，向上查找 config 目录
+        # 目标 YAML 在项目根目录 config/excel_engine_config.yaml
         try:
             # parents[2] -> packages/excel_engine
-            local_config_path = Path(__file__).resolve().parents[2] / "config" / "excel_engine_config.yaml"
+            local_config_path = PROJECT_ROOT / "config" / "excel_engine_config.yaml"
         except (NameError, IndexError):
              local_config_path = Path("config/excel_engine_config.yaml")
 

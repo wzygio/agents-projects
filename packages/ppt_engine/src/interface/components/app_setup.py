@@ -2,6 +2,7 @@
 import sys, logging, os
 from typing import Any 
 from pptx.dml.color import RGBColor 
+
 from packages.ppt_engine.src.utils.local_utils import Utils
 
 class AppSetup:

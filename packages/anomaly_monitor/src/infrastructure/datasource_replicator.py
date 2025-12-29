@@ -8,7 +8,6 @@ try:
     sys.path.append(str(Path(__file__).resolve().parents[4]))
 except IndexError:
     pass 
-from packages.anomaly_monitor.src.config import AnomalyMonitorConfig
 
 # ================= 配置区域 =================
 # 共享盘路径 (源头)
