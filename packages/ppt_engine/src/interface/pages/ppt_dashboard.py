@@ -9,7 +9,8 @@ from packages.ppt_engine.src.config import load_config
 
 # [修改 2] 导入核心业务逻辑类 (不再是通过 subprocess 调用 main.py)
 from packages.ppt_engine.src.application.ppt_generator import PPTGenerator
-from packages.ppt_engine.src.interface.components.app_setup import AppSetup
+from packages.common_utils.src.interface.app_setup import AppSetup
+from packages.ppt_engine.src.interface.components.app_utils import AppUtils
 
 # 初始化配置对象
 # 这确保了无论 Streamlit 何时重启，我们都能拿到最新的、正确的配置
@@ -24,7 +25,7 @@ logger = logging.getLogger("PPTDashboard")
 
 @st.cache_resource
 def init_portal_resources():
-    AppSetup.initialize_app()
+    AppSetup.initialize_app("ppt_dashboard.log")
 
 init_portal_resources()
 
@@ -98,7 +99,7 @@ if generate_button:
         # --- 1. 处理模板上传 ---
         if template_source == "手动上传新模板":
             if uploaded_template_file:
-                saved_path = AppSetup.save_uploaded_file(uploaded_template_file, RESOURCES_DIR)
+                saved_path = AppUtils.save_uploaded_file(uploaded_template_file, RESOURCES_DIR)
                 # 更新 config 对象中的 path 属性
                 # 注意：这里假设 config.path.template_ppt_source 是一个 DataSourceItem 对象
                 # 如果它不存在，我们需要构造一个
@@ -137,7 +138,7 @@ if generate_button:
             if target_item:
                 if uploaded_file:
                     # 如果用户上传了文件 -> 保存并更新配置为 'uploaded'
-                    saved_path = AppSetup.save_uploaded_file(uploaded_file, RESOURCES_DIR)
+                    saved_path = AppUtils.save_uploaded_file(uploaded_file, RESOURCES_DIR)
                     target_item.source_type = 'upload'
                     target_item.path = str(saved_path)
                     # 也可以更新 filename，虽然 processing 逻辑主要看 path

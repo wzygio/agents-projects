@@ -5,7 +5,7 @@
 # =======================================================
 path:
   base_dir: '.'
-  resources_dir: 'resources' # 本地数据源
+  resources_dir: 'resources/ppt_engine' # 本地数据源
   data_cache_dir: 'data/cache' # 数据缓存目录
   data_raw_dir: 'data/raw' # 原始数据目录
   log_dir: 'logs' # 日志目录

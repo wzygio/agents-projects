@@ -14,6 +14,8 @@ if TYPE_CHECKING:
 
 from packages.ppt_engine.src.core.file_path_processor import process_dynamic_settings
 from packages.ppt_engine.src.core.canvas_processor import CanvasPreprocessor
+from packages.ppt_engine.src.core.element_processor import ElementProcessor
+from packages.ppt_engine.src.core.table_processor import TableProcessor
 from packages.ppt_engine.src.application.yield_generator import YieldDataSectionGenerator
 from packages.ppt_engine.src.application.anomaly_generator import AnomalyGenerator
 from packages.ppt_engine.src.application.risk_generator import RiskControlSectionGenerator
@@ -45,6 +47,8 @@ class PPTGenerator:
         # 注意：这里假设传入的 config 对象已经是处理过基础路径的 Pydantic 模型
         paths_cfg = self.config.path
         self.canvas_processor = CanvasPreprocessor(self.config)
+        self.element_processor = ElementProcessor(self.config) # 假设 ElementProcessor 需要 config
+        self.table_processor = TableProcessor() # 假设 TableProcessor 是无状态工具类或无需参数初始化
 
         if not paths_cfg.base_dir:
             raise ValueError("配置对象中缺少 base_dir 设置")
@@ -274,8 +278,33 @@ class PPTGenerator:
 
             GeneratorClass = generator_map[name]
             
-            # [Injection] 将 self.config 传递给子生成器
-            generator = GeneratorClass(self.prs, self.config)
+            # [修改点] 统一依赖注入逻辑
+            if name == 'yield_data':
+                # YieldGenerator 需要全套处理器
+                generator = GeneratorClass(
+                    prs=self.prs, 
+                    config=self.config,
+                    element_processor=self.element_processor,
+                    table_processor=self.table_processor
+                )
+            elif name == 'anomaly_management':
+                # AnomalyGenerator 需要 ElementProcessor
+                generator = GeneratorClass(
+                    prs=self.prs, 
+                    config=self.config, 
+                    element_processor=self.element_processor
+                )
+            elif name == 'risk_control':
+                # [新增] RiskGenerator 也完成重构，注入 ElementProcessor
+                generator = GeneratorClass(
+                    prs=self.prs, 
+                    config=self.config, 
+                    element_processor=self.element_processor
+                )
+            else:
+                # 兜底：其他未重构的生成器 (如果有)
+                generator = GeneratorClass(self.prs, self.config)
+
             generator.generate()
             
             new_slides = len(self.prs.slides) - slide_count_start

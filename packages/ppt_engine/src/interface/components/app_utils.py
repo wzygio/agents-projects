@@ -3,18 +3,7 @@ import sys, logging, os
 from typing import Any 
 from pptx.dml.color import RGBColor 
 
-from packages.ppt_engine.src.utils.local_utils import Utils
-
-class AppSetup:
-    @staticmethod
-    def initialize_app():
-        """
-        初始化应用的日志系统。
-        该方法用于配置应用程序的日志记录功能，将日志信息输出到指定的文件中。
-        """
-
-        Utils.setup_logging(log_filename="app.log")
-        logging.info("Application setup complete (logging initialized).")
+class AppUtils:
 
     @staticmethod
     def save_uploaded_file(uploaded_file, directory):
@@ -46,8 +35,8 @@ class AppSetup:
                 if isinstance(value, RGBColor):
                     data[key] = list(value)
                 else:
-                    AppSetup.revert_colors_to_list(value)
+                    AppUtils.revert_colors_to_list(value)
         elif isinstance(data, list):
             for item in data:
-                AppSetup.revert_colors_to_list(item)
+                AppUtils.revert_colors_to_list(item)
         return data

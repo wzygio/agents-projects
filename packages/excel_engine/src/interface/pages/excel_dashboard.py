@@ -16,12 +16,12 @@ from packages.excel_engine.src.application.report_genrator import GenerateReport
 from packages.excel_engine.src.application.style_renderer import RefineStylesUseCase
 
 # --- 3. 初始化系统 ---
-from packages.common_utils.src.infrastructure.app_setup import AppSetup
+from packages.common_utils.src.interface.app_setup import AppSetup
 
 # 使用 cache_resource 管理单例生命周期，而非依赖模块级全局变量
 @st.cache_resource
 def init_system():
-    AppSetup.initialize_app("hl_dashboard.log")
+    AppSetup.initialize_app("excel_dashboard.log")
 
 
 # 初始化日志和配置

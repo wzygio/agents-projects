@@ -1,3 +1,4 @@
+# file path：packages/ppt_engine/src/application/yield_generator.py
 import logging, re, os
 import pandas as pd
 import numpy as np
@@ -53,7 +54,6 @@ class YieldDataSectionGenerator:
         self.prs = prs
         self.config = config
         self.element_processor = element_processor
-        # TableProcessor 目前多为静态方法，但未来若改为实例，这里预留接口
         self.table_processor = table_processor 
 
         # 预先获取本章节的配置对象 (YieldDataConfig)。注意：这里使用属性访问 config.sections.yield_data

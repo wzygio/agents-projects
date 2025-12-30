@@ -15,7 +15,7 @@ class AppSetup:
         """
         
         # 3. 初始化日志系统
-        setup_logging(log_name)
+        setup_logging(log_filename = log_name)
 
         logging.info("✅ App environment initialized successfully.")
         logging.info(f"📂 Log file: {log_name}")

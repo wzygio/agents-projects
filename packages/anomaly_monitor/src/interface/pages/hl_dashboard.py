@@ -5,7 +5,7 @@ import logging
 
 # --- 1. 初始化系统环境 ---
 from packages.anomaly_monitor.src.application.hl_report_service import HLReportService
-from packages.common_utils.src.infrastructure.app_setup import AppSetup
+from packages.common_utils.src.interface.app_setup import AppSetup
 from packages.anomaly_monitor.src.interface.view_models.hl_dashboard_vm import MWDL_COLUMN_MAPPING, COLUMN_CONFIG, prepare_display_data
 
 # 使用 cache_resource 避免重复初始化

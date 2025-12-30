@@ -25,21 +25,19 @@ class AnomalyGenerator:
     """
     负责生成PPT第二章“CT异常闭环管理”相关的所有页面。
     """
-    def __init__(self, prs: PptxPresentationObject, config: "PptEngineConfig"):
+    def __init__(self, prs: PptxPresentationObject, config: "PptEngineConfig", element_processor: ElementProcessor):
         """
         构造函数，初始化时会加载本章节专属的配置。
         
         Args:
             prs: PPT 演示文稿对象
-            config: 强类型的配置对象 (Dependency Injection)
+            config: 强类型的配置对象
+            element_processor: [Dependency Injection] 注入的元素处理器
         """
         self.prs = prs
         self.config = config
-        self.element_processor = ElementProcessor(self.config)
+        self.element_processor = element_processor
         
-        # [Standard 3] Type Access (Hybrid Strategy):
-        # 1. 访问 Config 对象下的 sections 属性 (点号访问)
-        # 2. 将特定章节配置转换为字典 (Dict Conversion)，以兼容遗留的 .get() 逻辑
         section_config_obj = getattr(self.config.sections, 'anomaly_management')
         
         if hasattr(section_config_obj, 'model_dump'):

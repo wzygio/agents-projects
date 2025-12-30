@@ -19,9 +19,14 @@ class RiskControlSectionGenerator:
     """
     负责生成PPT第三章“风险品释放管控”相关的所有页面。
     """
-    def __init__(self, prs: PptxPresentationObject, config: PptEngineConfig):
+    def __init__(self, prs: PptxPresentationObject, config: PptEngineConfig, element_processor: ElementProcessor):
         """
         构造函数，初始化时会加载本章节专属的配置。
+        
+        Args:
+            prs: PPT 演示文稿对象
+            config: 强类型的配置对象
+            element_processor: [Dependency Injection] 注入的元素处理器
         """
         # 添加类型检查
         if not isinstance(prs, PptxPresentationObject):
@@ -29,12 +34,11 @@ class RiskControlSectionGenerator:
            
         self.prs = prs
         self.config = config # 保存传入的完整配置
-        self.element_processor = ElementProcessor(self.config)
+        self.element_processor = element_processor
         
         # 从传入的config中，安全地获取本章节的配置字典
         self.cfg = self.config.sections.risk_control
         self.paths_cfg = self.config.path
-
 
         self.processed_data: Dict[str, Any] = {}
         logging.info("RiskControlSectionGenerator 已初始化。")
