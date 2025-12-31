@@ -682,8 +682,11 @@ class YieldDataSectionGenerator:
                         style["h_align"] = PP_ALIGN.CENTER
                 
                 TableProcessor.apply_cell_style(cell, style)
-
-    def _sanitize_header(self, col):
+    @staticmethod
+    def _sanitize_header(col):
+            if col is None:
+                return ""
+            
             # 如果不是元组，直接转字符串
             if not isinstance(col, tuple):
                 return str(col)
