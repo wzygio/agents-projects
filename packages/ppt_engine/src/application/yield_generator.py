@@ -97,10 +97,12 @@ class YieldDataSectionGenerator:
         excel_keyword = self.paths_cfg.data_source_excel_FPY or '入库良率'
         
         # 调用 Utils 时传入明确路径
-        excel_filename = Utils.find_latest_matching_file(resources_dir, excel_keyword)
-        if not excel_filename:
+        found_excel_path = Utils.find_latest_matching_file(resources_dir, excel_keyword)
+        if not found_excel_path:
+            # 增加更明确的日志，方便排查
+            logging.warning(f"在目录 {resources_dir} 下未找到包含关键词 '{excel_keyword}' 的文件")
             return
-        excel_path = resources_dir / excel_filename
+        excel_path = found_excel_path
 
         # 2. 【核心】调用地址解析器
         address_maps = self._resolve_dynamic_addresses(str(excel_path))
@@ -158,11 +160,14 @@ class YieldDataSectionGenerator:
         # 5. 数据融合
         final_table_data = self._update_data_by_factory(excel_data_dfs, ppt_data_dict, self.data_cfg.categories)
 
+        # [Fix] 修正取值路径：从 self.data_cfg.categories_titles 获取
+        titles_map = self.data_cfg.categories_titles if self.data_cfg.categories_titles else {}
+
         self.processed_data = {
             "images": image_paths,
             "sentences": sentences,
             'table_data': final_table_data,
-            "titles": self.data_cfg.locators.categories_titles, # 访问深层对象属性
+            "titles": titles_map,  # [Corrected Path]
             "illustration_texts": illustration_texts,
             "safeguards_texts": safeguards_texts
         }
@@ -179,10 +184,15 @@ class YieldDataSectionGenerator:
         else:
             raise ValueError("Data configuration object is not initialized")
         
+        # [修改点 1] 从 data_cfg 直接获取 excel_sections (修正取值路径)
+        # [修改点 2] 增加空值防御 (or {})，确保它永远是字典，不会是 None
+        # [修改点 3] 使用 dict() 创建副本，避免后续修改影响到原始配置对象
+        static_sections = self.data_cfg.excel_sections if self.data_cfg.excel_sections else {}
+
         resolved_maps = {
             'image_addresses': {},
             'sentence_addresses': {},
-            'excel_sections': locators.excel_sections # 直接获取
+            'excel_sections': dict(static_sections) # 关键修正：确保初始化为字典
         }
 
         # 3. 在“入库良率趋势”表中定位

@@ -31,7 +31,7 @@ class PptReader:
         try:
             # [Standard 3] Type Access: 使用点号访问 PathsConfig 属性
             paths_cfg = self.config.path
-            template_location = paths_cfg.template_ppt
+            template_location = paths_cfg.output_template_ppt
             
             # 智能路径判断逻辑 (Pathlib 风格)
             # 判断是否包含路径分隔符，或者是一个单纯的文件名
