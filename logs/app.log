@@ -1,0 +1,2 @@
+2026-01-04 16:13:44 - INFO - [local_utils] - 日志系统已初始化，将同时输出到文件 'app.log' 和控制台。
+2026-01-04 16:13:44 - ERROR - [local_utils] - 未找到包含关键字 'nonexistent' 的文件。

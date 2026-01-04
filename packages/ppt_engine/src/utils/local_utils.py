@@ -4,6 +4,7 @@ import subprocess
 from pathlib import Path
 from zipfile import ZipFile, BadZipFile
 import unicodedata 
+from typing import Optional
 
 class Utils:
     
@@ -178,13 +179,15 @@ class Utils:
             return False
 
     @staticmethod
-    def normalize_string(text: str) -> str:
+    def normalize_string(text: str | None | int | float | bool = None) -> str | None:
         """
         对字符串进行深度清洗和标准化，以便进行可靠的比较。
         1. 使用NFKC进行Unicode标准化 (例如，将全角字符转为半角)。
         2. 移除所有类型的空白字符。
-        3. 转换为小写。
         """
+        if text is None:
+                return "none"
+        
         try:
             # 确保输入是字符串
             text = str(text)
@@ -192,7 +195,6 @@ class Utils:
             normalized_text = unicodedata.normalize('NFKC', text)
             # 2. 使用正则表达式移除所有空白字符 (包括空格, tab, 换行, 全角空格等)
             no_whitespace_text = re.sub(r'\s+', '', normalized_text)
-            # 3. 转换为小写
             return no_whitespace_text
         except Exception:
             # 如果出现任何意外，返回原始字符串的小写形式作为备用

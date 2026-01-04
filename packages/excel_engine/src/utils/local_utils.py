@@ -277,42 +277,58 @@ class Utils:
     @staticmethod
     def parse_fragments_flat(text_content: str, definitions: list[dict], default_style_name: str) -> list[tuple[str, str]]:
         """
-        [策略一：扁平解析 - 最终版] 使用 finditer 稳定地处理单层标题。
-        此版本逻辑与分层解析器同源，确保健壮性。
+        [修复版] 扁平解析器。
+        使用正则命名分组 (?P<name>...) 来区分匹配到了哪个规则，从而应用正确的样式。
         """
         if not text_content or not str(text_content).strip():
             return []
         if not definitions:
             return [(text_content, default_style_name)]
 
-        # 将所有扁平规则的 pattern 用 | (或) 连接起来
-        all_patterns = [defn['pattern'] for defn in definitions]
-        combined_pattern = re.compile("|".join(all_patterns), flags=re.MULTILINE)
+        # 1. 构建带有命名分组的组合正则
+        # 格式: (?P<GROUP_0>pattern0)|(?P<GROUP_1>pattern1)
+        # 这样我们可以通过 group name 知道是第几个 definition 匹配了
+        pattern_parts = []
+        for i, defn in enumerate(definitions):
+            # 确保 pattern 本身是合法的，并且用括号包围以防优先级问题
+            pattern_parts.append(f"(?P<GROUP_{i}>{defn['pattern']})")
+        
+        combined_pattern_str = "|".join(pattern_parts)
+        combined_pattern = re.compile(combined_pattern_str, flags=re.MULTILINE)
         
         fragments = []
         last_end = 0
         
-        # 使用 finditer 遍历所有匹配到的标题
+        # 2. 遍历匹配
         for match in combined_pattern.finditer(text_content):
-            # 1. 添加上一个标题结尾到当前标题开头之间的“内容”
+            # A. 处理匹配内容之前的普通文本
             content_before = text_content[last_end:match.start()]
             if content_before:
                 fragments.append((content_before, default_style_name))
             
-            # 2. 添加匹配到的“标题”本身
-            title_text = match.group(0)
-            # 简化处理：所有匹配到的标题都使用第一个定义的样式
-            fragments.append((title_text, definitions[0]['style']))
+            # B. 确定匹配到了哪个组，从而找到对应的样式
+            matched_text = match.group(0)
+            matched_style = default_style_name # 兜底
             
-            # 3. 更新扫描位置
+            # 遍历所有分组，看哪个有值
+            # match.groupdict() 返回 { 'GROUP_0': '标题1', 'GROUP_1': None }
+            for group_name, group_value in match.groupdict().items():
+                if group_value is not None:
+                    # 解析索引：GROUP_0 -> 0
+                    idx = int(group_name.split('_')[1])
+                    matched_style = definitions[idx]['style']
+                    break
+            
+            fragments.append((matched_text, matched_style))
+            
             last_end = match.end()
 
-        # 4. 添加最后一个标题之后的所有剩余“内容”
+        # 3. 处理剩余文本
         remaining_content = text_content[last_end:]
         if remaining_content:
             fragments.append((remaining_content, default_style_name))
             
-        # 5. 如果全文都找不到任何标题，则视作一整段内容
+        # 4. 全文无匹配的情况
         if not fragments and text_content:
             fragments.append((text_content, default_style_name))
         

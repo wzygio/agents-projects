@@ -19,7 +19,7 @@ class ElementProcessor:
     负责处理 PPT 页面上的具体元素操作，如添加图片、文本、图表、重排页面等。
     """
 
-    def __init__(self, config: PptEngineConfig):
+    def __init__(self, config: Optional[PptEngineConfig] = None):
         self.config = config
 
     def add_logo(self, slide, logo_path, cfg: ElementLayout):
@@ -110,7 +110,7 @@ class ElementProcessor:
         在一个预设的占位符中，为列表中的每个文本字符串插入一个带项目符号的段落。
         """
         try:
-            placeholder_name = cfg["placeholder_name"]
+            placeholder_name = cfg.placeholder_name
             
             target_shape = None
             for shape in slide.shapes:
@@ -127,10 +127,10 @@ class ElementProcessor:
                 target_shape.fill.solid()
                 # 假设 fill_color 是 RGBColor 对象或元组，这里简化处理
                 # 如果传入的是元组，需转换为 RGBColor
-                if isinstance(cfg["fill_color"], (list, tuple)):
+                if isinstance(cfg.fill_color, (list, tuple)):
                      target_shape.fill.fore_color.rgb = RGBColor(*cfg.fill_color or [183, 222, 232])
                 else:
-                     target_shape.fill.fore_color.rgb = cfg["fill_color"]
+                     target_shape.fill.fore_color.rgb = cfg.fill_color
                 target_shape.fill.fore_color.transparency = 0.9
 
             tf = target_shape.text_frame

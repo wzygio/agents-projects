@@ -447,7 +447,7 @@ class YieldDataSectionGenerator:
         负责定位文本框，并按顺序调度三个板块的绘制。
         """
         # --- 1. 基础准备 ---
-        placeholder_name = cfg["placeholder_name"]
+        placeholder_name = cfg.placeholder_name
         target_shape = next((s for s in slide.shapes if s.name == placeholder_name), None)
         
         if not target_shape:
