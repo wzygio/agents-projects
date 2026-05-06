@@ -57,7 +57,7 @@ _config_instance: Optional[AppConfig] = None
 
 # 自动定位项目根目录
 try:
-    PROJECT_ROOT = Path(__file__).resolve().parents[2]
+    PROJECT_ROOT = Path(__file__).resolve().parents[1]
 except NameError:
     PROJECT_ROOT = Path.cwd()
 

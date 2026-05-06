@@ -2,7 +2,8 @@
 
 window.StepList = ({ stepStates, focusedStepId, setFocusedStepId, runMode, isGlobalRunning, runTask }) => {
     return (
-        <div className="flex flex-col gap-4 w-[480px]">
+        // 🛠️ 修复：引入 step-list 类，增加 pt-8 (顶部边距防止裁剪)，并开启内部纵向滚动
+        <div className="step-list flex flex-col gap-4 w-[480px] pt-8 h-full overflow-y-auto overflow-x-hidden scrollbar-hide">
             {window.PIPELINE_STEPS.map((step) => {
                 const state = stepStates[step.id];
                 const isFocused = focusedStepId === step.id;

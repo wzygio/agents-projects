@@ -2,6 +2,7 @@
 const { useState, useEffect } = React;
 
 function App() {
+    // 状态管理
     const [runMode, setRunMode] = useState('human');
     const [isGlobalRunning, setIsGlobalRunning] = useState(false);
     const [focusedStepId, setFocusedStepId] = useState(1);
@@ -19,6 +20,7 @@ function App() {
 
     // 核心业务逻辑 (Fetch)
     const runTask = async (targetStepId = null) => {
+        // 参数：targetStepId。如果为 null，则重置所有状态并从头开始运行整个流水线；如果指定了 ID，则仅运行该步骤。
         if (targetStepId === null) {
             setIsGlobalRunning(true);
             setStepStates(prev => {
@@ -32,18 +34,30 @@ function App() {
             setFocusedStepId(targetStepId);
         }
 
+        // 请求准备
         try {
             let url = `/start/automated_duty_system?mode=${runMode}`;
             if (targetStepId !== null) url += `&step_id=${targetStepId}`;
 
-            const response = await fetch(url);
-            const reader = response.body.getReader();
-            const decoder = new TextDecoder();
+            // 流式读取
+            const response = await fetch(url); // 使用 fetch 发起请求
+            const reader = response.body.getReader(); // 通过 response.body.getReader() 获取读取器
+            const decoder = new TextDecoder(); // 使用 TextDecoder 解码二进制数据
+
+            // 🛠️ 修复：新增缓冲区变量，用于拼接被网络截断的 JSON 碎片
+            let buffer = ''; 
 
             while (true) {
                 const { value, done } = await reader.read();
                 if (done) break;
-                const lines = decoder.decode(value).split('\n');
+                
+                // 🛠️ 修复：追加新数据到缓冲区 (开启 stream: true 保证多字节字符不乱码)
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+                
+                // 🛠️ 修复：把最后一行（必定是不完整/未闭合的）弹出来，留在 buffer 里等下个 chunk
+                buffer = lines.pop(); 
+
                 for (const line of lines) {
                     if (!line.trim()) continue;
                     try {
@@ -68,14 +82,16 @@ function App() {
                 }
             }
         } catch (err) { console.error(err); } 
+        // 异常处理与请理
         finally {
             setIsGlobalRunning(false);
             if (targetStepId !== null) updateStepState(targetStepId, s => ({...s, status: s.status === 'running' ? 'error' : s.status}));
         }
     };
 
+    // UI布局与组件
     return (
-        <div className="main-layout font-sans bg-[#fafafa]">
+        <div className="flex h-screen w-full font-sans bg-[#fafafa]">
             {/* 侧边栏 (静态) */}
             <div className="sidebar">
                 <div className="mb-10 px-2 mt-2">
@@ -104,7 +120,7 @@ function App() {
                     runTask={runTask} 
                 />
 
-                <div className="flex-1 flex gap-16 overflow-hidden">
+                <div className="flex-1 flex gap-16 overflow-hidden pt-4">
                     {/* 2. StepList 组件 */}
                     <window.StepList 
                         stepStates={stepStates}

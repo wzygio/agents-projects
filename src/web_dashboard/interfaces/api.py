@@ -21,7 +21,6 @@ from src.web_dashboard.infrastructure.process_manager import ProcessManager
 from src.web_dashboard.application.orchestrator import WorkflowOrchestrator
 from src.config import load_config
 
-
 # --- 初始化日志 ---
 logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(levelname)s: %(message)s')
 logger = logging.getLogger("API")
@@ -63,19 +62,19 @@ async def startup_event():
     # 启动 异常监控 (8511)
     process_manager.start_streamlit_service(
         "Anomaly_Monitor_UI", 
-        "packages/anomaly_monitor/src/interface/hl_app.py", 
+        "packages/anomaly_monitor/src/interface/pages/hl_dashboard.py", 
         8511
     )
     # 启动 Excel (8512)
     process_manager.start_streamlit_service(
         "Excel_Engine_UI", 
-        "packages/excel_engine/src/interface/app.py", 
+        "packages/excel_engine/src/interface/pages/excel_dashboard.py", 
         8512
     )
     # 启动 PPT (8513)
     process_manager.start_streamlit_service(
         "PPT_Engine_UI", 
-        "packages/ppt_engine/src/interface/app.py", 
+        "packages/ppt_engine/src/interface/pages/ppt_dashboard.py", 
         8513
     )
 

@@ -57,7 +57,7 @@ class TestLocalUtils:
         # [修复2] 源代码提取的是组(1)，所以结果是 "A" 而不是 "产品A"
         assert "A" in models 
         assert "B" in models
-
+        
     def test_get_safe_source_path(self, setup_env):
         """测试获取安全的源路径"""
         # [修复3] source_path 配置应指向目录路径，而非文件名

@@ -11,11 +11,22 @@ from tests.factories.ppt_engine_factory import PptEngineConfigFactory, DataSourc
 class TestPPTGenerator:
     """测试 PPTGenerator 类的功能"""
 
-    def setup_method(self):
-        """每个测试方法执行前的设置"""
+    @pytest.fixture(autouse=True)
+    def setup_generator(self, tmp_path):
+        """替代原来的 setup_method，自动应用到每个测试"""
         self.config = PptEngineConfigFactory.build()
+        
+        # === 关键修复开始 ===
+        # 强制将所有路径指向安全的临时目录
+        self.config.path.base_dir = str(tmp_path)
+        self.config.path.network_source_dir = str(tmp_path / "network")
+        self.config.path.resources_dir = "resources" # 相对路径
+        self.config.path.output_dir = "output"
+        # === 关键修复结束 ===
+
         self.generator = PPTGenerator(self.config)
-        # 1. 准备 Mock 配置 (最小化)
+        
+        # 为 Mock 准备 (保留你原来的逻辑)
         self.mock_config = MagicMock()
         # 模拟路径
         self.mock_config.path.network_source_dir = "N:/"
@@ -94,8 +105,6 @@ class TestPPTGenerator:
         # 这里我们只断言 generator 实例成功创建，且没有 crash。
         assert generator is not None
 
-
-
     def test_init_no_base_dir(self):
         """测试没有基础目录的配置"""
         config = PptEngineConfigFactory.build()
@@ -103,7 +112,6 @@ class TestPPTGenerator:
 
         with pytest.raises(ValueError, match="配置对象中缺少 base_dir 设置"):
             PPTGenerator(config)
-
 
 
     @patch('packages.ppt_engine.src.application.ppt_generator.process_dynamic_settings')
